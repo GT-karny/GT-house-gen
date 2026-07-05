@@ -1,0 +1,23 @@
+CC0 textures from Poly Haven (https://polyhaven.com) — Public Domain (CC0).
+
+plaster: OK polyhaven.com/a/painted_plaster_wall
+siding: OK polyhaven.com/a/wood_planks
+stone: OK polyhaven.com/a/japanese_stone_wall
+roof: OK polyhaven.com/a/clay_roof_tiles
+asphalt: OK polyhaven.com/a/aerial_asphalt_01
+concrete: OK polyhaven.com/a/concrete_floor
+grass: OK polyhaven.com/a/aerial_grass_rock
+gravel: OK polyhaven.com/a/bicolour_gravel
+
+Also includes normal (_n) + roughness (_r) maps per surface, and:
+hdri/env.hdr: Poly Haven HDRI "kloofendal_48d_partly_cloudy" (CC0).
+
+AlsoAmbientCG (CC0): Metal032, Fence007A. PolyHaven: leafy_grass(foliage), bark_brown_01(bark).
+
+--- Variation set (AmbientCG, CC0 — https://ambientcg.com) ---
+Color→base, NormalGL→_n, Roughness→_r, Metalness→_m, Opacity→_o.
+Walls:  brick=Bricks090  brick2=Bricks066  plaster2=Plaster003
+        siding2=WoodSiding001  siding3=Planks011  stone2=PavingStones037  concrete2=Concrete034
+Doors:  door_a=Wood062  door_b=Wood067  door_c=Wood048  door_paint=PaintedWood001
+Fences: fence2=Fence006  fence3=Fence004
+Store:  ribbed=CorrugatedSteel005 (角波金属パネル: 店舗外壁/シャッター/折板屋根)

@@ -1,0 +1,28 @@
+{
+  "name": "house-gen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Procedural modular house generator prototype (Three.js) — footprint mass composition + panel-grid facade. Logic in src/gen is renderer-agnostic and portable.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lil-gui": "^0.19.2",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.172.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
