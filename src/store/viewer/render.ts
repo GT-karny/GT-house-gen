@@ -12,7 +12,7 @@ import type { StoreRoofMass } from '../gen/roof';
 import { planarBoxUV, WALL_TILE } from '../../viewer/modules';
 import {
   moduleMaterial, storeWallMaterial, mullionMaterial, roofMaterial, flatRoofDeckMaterial, parapetMaterial, poleMaterial, metalMaterial,
-  mansardMaterial, awningMaterial, signFaceMaterial, fasciaPanelMaterial, fasciaVisual,
+  mansardMaterial, awningMaterial, signFaceMaterial, posterMaterial, fasciaPanelMaterial, fasciaVisual,
   type StoreWallVariant,
 } from './materials';
 import { storeSiteMeshes } from './site';
@@ -209,11 +209,12 @@ function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance', logoId: nu
   // information scale without generating an interior. One in four bays keeps
   // both geometry and texture count modest on mass-generated stores.
   if (kind === 'glazing' && panel.floor === 0 && panel.bay % 4 === 1) {
-    const pw = Math.min(0.68, w * 0.42);
-    const ph = Math.min(1.05, h * 0.46);
+    const maxH = Math.min(1.12, h * 0.5);
+    const pw = Math.min(0.72, w * 0.44, maxH * (2 / 3));
+    const ph = pw * 1.5;
     const poster = new THREE.Mesh(
       new THREE.PlaneGeometry(pw, ph),
-      signFaceMaterial(0xffffff, logoId, 'poster', pw / ph),
+      posterMaterial(logoId),
     );
     poster.position.set(w * 0.2, -h * 0.15, PANEL_T / 2 - 0.075);
     grp.add(poster);

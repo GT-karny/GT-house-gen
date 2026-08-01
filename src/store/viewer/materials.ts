@@ -424,6 +424,33 @@ export function signFaceMaterial(brand: number, logoId = 0, role: StoreSignRole 
     });
   });
 }
+
+const PILOT_POSTERS: Readonly<Partial<Record<number, string>>> = {
+  2: '/textures/store/posters/kurashikan-gardening.webp',
+  3: '/textures/store/posters/machiport-morning-set.webp',
+  7: '/textures/store/posters/grillbuns-cheese-burger.webp',
+};
+
+/** Finished retail artwork for the three pilot brands. One cached texture is
+ * shared by every instance; non-pilot brands retain the lightweight canvas
+ * poster, and headless tests avoid browser image loading entirely. */
+export function posterMaterial(logoId: number): THREE.Material {
+  const src = PILOT_POSTERS[logoId];
+  if (!src) return signFaceMaterial(0xffffff, logoId, 'poster', 2 / 3);
+  return memo(`retail-poster:${logoId}`, () => {
+    if (typeof document === 'undefined') {
+      return new THREE.MeshStandardMaterial({ color: 0xf0eee7, roughness: 0.72, metalness: 0 });
+    }
+    const map = new THREE.TextureLoader().load(src);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 4;
+    return new THREE.MeshStandardMaterial({
+      color: 0xffffff, map,
+      emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.025,
+      roughness: 0.72, metalness: 0,
+    });
+  });
+}
 /** The signage fascia (看板帯): a dark band carrying the wide sample logo strip. */
 export function fasciaMaterial(brand: number, logoId = 0, aspect = 5): THREE.Material {
   const aspectKey = Math.round(aspect * 20) / 20;
