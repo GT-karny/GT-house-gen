@@ -7,7 +7,7 @@
  * resolution-independent geometry and live type.
  */
 
-export type StoreSignRole = 'fascia' | 'wall' | 'pylon' | 'blade' | 'rooftop' | 'square' | 'menu';
+export type StoreSignRole = 'fascia' | 'wall' | 'pylon' | 'blade' | 'rooftop' | 'square' | 'menu' | 'promo' | 'poster';
 
 export interface PilotBrandSpec {
   id: number;
@@ -158,6 +158,28 @@ function panelGap(ctx: Ctx, w: number, y: number, h: number, colour = '#273137')
   ctx.fillStyle = colour; ctx.fillRect(0, y, w, h);
 }
 
+function drawSecondary(ctx: Ctx, w: number, h: number, brand: PilotBrandSpec, role: 'promo' | 'poster'): void {
+  const compact = role === 'poster';
+  const compactCopy = (top: string, bottom: string, colour: string) => {
+    centeredFit(ctx, top, w, h * 0.36, w * 0.9, h * 0.34, KAKU, 900, colour);
+    centeredFit(ctx, bottom, w, h * 0.68, w * 0.9, h * 0.31, KAKU, 900, colour);
+  };
+  if (brand.id === 2) {
+    ctx.fillStyle = compact ? brand.surface : brand.primary; ctx.fillRect(0, 0, w, h);
+    if (compact) compactCopy('園芸', 'DIY', brand.primary);
+    else centeredFit(ctx, '園芸・資材館', w, h * 0.5, w * 0.94, h * 0.68, KAKU, 900, brand.surface);
+  } else if (brand.id === 3) {
+    ctx.fillStyle = brand.surface; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = brand.secondary; ctx.fillRect(0, 0, w, h * 0.12);
+    ctx.fillStyle = brand.primary; ctx.fillRect(0, h * 0.88, w, h * 0.12);
+    centeredFit(ctx, compact ? 'ATM' : 'ATM　24時間営業', w, h * 0.51, w * 0.93, h * 0.62, KAKU, 900, brand.primary);
+  } else {
+    ctx.fillStyle = compact ? brand.primary : brand.surface; ctx.fillRect(0, 0, w, h);
+    if (compact) compactCopy('お持ち', '帰り', brand.accent);
+    else centeredFit(ctx, 'ドライブスルー →', w, h * 0.5, w * 0.94, h * 0.64, KAKU, 900, brand.primary);
+  }
+}
+
 /** Roadside pylons use large copy in stacked cabinets, matching Japanese stores. */
 function drawKurashikanPylon(ctx: Ctx, w: number, h: number, b: PilotBrandSpec): void {
   // Old Japanese home-centre pylons read as three separate cabinets: an iconic
@@ -296,7 +318,8 @@ export function drawPilotBrand(ctx: Ctx, w: number, h: number, logoId: number, r
   const brand = pilotBrandFor(logoId);
   if (!brand) return false;
   ctx.save();
-  if (brand.id === 2) drawKurashikan(ctx, w, h, brand, role);
+  if (role === 'promo' || role === 'poster') drawSecondary(ctx, w, h, brand, role);
+  else if (brand.id === 2) drawKurashikan(ctx, w, h, brand, role);
   else if (brand.id === 3) drawMachiPort(ctx, w, h, brand, role);
   else drawGrillBuns(ctx, w, h, brand, role);
   ctx.restore();

@@ -7,6 +7,8 @@ const PROOFS: ReadonlyArray<{ role: StoreSignRole; width: number; height: number
   { role: 'pylon', width: 360, height: 560 },
   { role: 'blade', width: 240, height: 560 },
   { role: 'rooftop', width: 800, height: 260 },
+  { role: 'promo', width: 800, height: 150 },
+  { role: 'poster', width: 320, height: 520 },
 ];
 
 async function renderProofs(): Promise<void> {

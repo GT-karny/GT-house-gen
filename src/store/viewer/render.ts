@@ -7,12 +7,12 @@
 // ============================================================================
 
 import * as THREE from 'three';
-import type { StoreBuildingPlan, StoreSitePlan, Canopy, Vec2, StorePanel, SignInstance } from '../gen/types';
+import type { StoreBuildingPlan, StoreSitePlan, Canopy, Vec2, StorePanel, SignInstance, WallFace } from '../gen/types';
 import type { StoreRoofMass } from '../gen/roof';
 import { planarBoxUV, WALL_TILE } from '../../viewer/modules';
 import {
   moduleMaterial, storeWallMaterial, mullionMaterial, roofMaterial, flatRoofDeckMaterial, parapetMaterial, poleMaterial, metalMaterial,
-  mansardMaterial, awningMaterial, signFaceMaterial, fasciaMaterial,
+  mansardMaterial, awningMaterial, signFaceMaterial, fasciaPanelMaterial, fasciaVisual,
   type StoreWallVariant,
 } from './materials';
 import { storeSiteMeshes } from './site';
@@ -109,16 +109,22 @@ export function renderStore(
     wallSigns.some((s) => Math.hypot(panel.pos.x - s.pos.x, panel.pos.y - s.pos.y) < s.w / 2 + panel.w / 2 + 0.2);
 
   // storefront panels — wall/shutter as UV-baked PBR boards, glazing/entrance as
-  // reflective glass assemblies. signband panels are collected per face and drawn
-  // as ONE continuous fascia (below) so it wraps corners cleanly.
-  const bandByFace = new Map<number, { z: number; h: number }>();
+  // reflective glass assemblies. Sign-band cells remain separate physical panels;
+  // only the narrow brand rails run continuously across their joints.
+  const bandByFace = new Map<number, StorePanel[]>();
+  const entrancesByFace = new Map<number, StorePanel[]>();
+  for (const panel of plan.panels) if (panel.type === 'entrance') {
+    const entries = entrancesByFace.get(panel.faceIndex) ?? [];
+    entries.push(panel); entrancesByFace.set(panel.faceIndex, entries);
+  }
   for (const panel of plan.panels) {
     if (panel.type === 'signband') {
-      if (!bandByFace.has(panel.faceIndex)) bandByFace.set(panel.faceIndex, { z: panel.z, h: panel.h });
+      const cells = bandByFace.get(panel.faceIndex) ?? [];
+      cells.push(panel); bandByFace.set(panel.faceIndex, cells);
       continue;
     }
     if (panel.type === 'glazing' || panel.type === 'entrance') {
-      g.add(glazedPanel(panel, panel.type));
+      g.add(glazedPanel(panel, panel.type, plan.logoId));
       // striped 日除けテント over frontage ground glazing (family-restaurant look),
       // skipping bays taken by the wall sign
       if (p.windowAwnings && panel.type === 'glazing' && panel.floor === 0 && frontageFaces.has(panel.faceIndex) && !underWallSign(panel))
@@ -130,10 +136,10 @@ export function renderStore(
   }
   // Continuous branded fascia per frontage/flank face. The horizontal band itself
   // is the identity, as on ordinary Japanese convenience and roadside chains.
-  for (const [faceIndex, info] of bandByFace) {
+  for (const [faceIndex, panels] of bandByFace) {
     const face = plan.faces.find((f) => f.index === faceIndex);
     if (!face) continue;
-    g.add(bandMesh(face.a, face.b, face.normal, info.z, info.h, p.brandColor, plan.logoId));
+    g.add(bandMesh(face, panels, p.brandColor, plan.logoId, entrancesByFace.get(faceIndex) ?? []));
   }
 
   for (const r of roofs) roofMeshes(r).forEach((mesh) => g.add(mesh));
@@ -167,7 +173,7 @@ function boardPanel(panel: StorePanel, wallV: StoreWallVariant): THREE.Mesh {
 /** A glazed span: recessed reflective glass + a dark mullion grid, and for the
  *  entrance a perimeter frame + a slim brand awning. Built in panel-local space
  *  (x across, y up, z out) then oriented. */
-function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance'): THREE.Group {
+function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance', logoId: number): THREE.Group {
   const grp = new THREE.Group();
   const w = panel.w, h = panel.h;
   const glassT = 0.06, mZ = PANEL_T / 2 - 0.02; // mullions sit just proud of the recessed glass
@@ -199,6 +205,20 @@ function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance'): THREE.Gro
   const transom = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * fr, 0.08, 0.09), mullMat);
   transom.position.set(0, ty, mZ); grp.add(transom);
 
+  // A sparse campaign poster behind the glass gives the storefront a second
+  // information scale without generating an interior. One in four bays keeps
+  // both geometry and texture count modest on mass-generated stores.
+  if (kind === 'glazing' && panel.floor === 0 && panel.bay % 4 === 1) {
+    const pw = Math.min(0.68, w * 0.42);
+    const ph = Math.min(1.05, h * 0.46);
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(pw, ph),
+      signFaceMaterial(0xffffff, logoId, 'poster', pw / ph),
+    );
+    poster.position.set(w * 0.2, -h * 0.15, PANEL_T / 2 - 0.075);
+    grp.add(poster);
+  }
+
   // entrance gets a slim flat awning at DOOR-HEAD height (just above the transom),
   // so it stays clear below the signage band rather than colliding with it.
   if (kind === 'entrance') {
@@ -212,25 +232,84 @@ function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance'): THREE.Gro
   return grp;
 }
 
-/** One continuous signage fascia along a wall face (a→b), just proud of the wall
- *  and extended past each end so perpendicular bands overlap and hide the corner. */
-function bandMesh(a: Vec2, b: Vec2, normal: Vec2, zc: number, h: number, brand: number, logoId: number): THREE.Group {
+/** Bay-jointed fascia panels plus continuous brand rails and a separate logo box.
+ *  The layered construction matches how Japanese convenience-store fascias are
+ *  fabricated, rather than baking the entire elevation into one canvas texture. */
+function bandMesh(face: WallFace, panels: StorePanel[], brand: number, logoId: number, entrances: StorePanel[]): THREE.Group {
   const grp = new THREE.Group();
   const up = new THREE.Vector3(0, 1, 0);
+  const { a, b, normal } = face;
   const A = toThree(a.x, a.y, 0), B = toThree(b.x, b.y, 0);
   const L = new THREE.Vector3().subVectors(B, A).length() || 1;
   const EXT = PANEL_T / 2;
-  const DEPTH = 0.08;
+  const DEPTH = 0.075;
   const zAxis = dir3(normal.x, normal.y);
   const xAxis = new THREE.Vector3().crossVectors(up, zAxis).normalize();
-  const cabinet = signBoard(
-    L + 2 * EXT, h, DEPTH,
-    fasciaMaterial(brand, logoId, (L + 2 * EXT) / h),
-    { doubleSided: false, frame: 0.045 },
+  const cells = [...panels].sort((p, q) => p.bay - q.bay);
+  const h = cells[0]?.h ?? 0.9;
+  const zc = cells.reduce((sum, p) => sum + p.z, 0) / Math.max(1, cells.length);
+  const bayCount = Math.max(1, cells.length || face.bays);
+  const bayW = L / bayCount;
+  const palette = fasciaVisual(logoId, brand);
+
+  // dark backing is visible only in the 14 mm construction joints
+  const backing = new THREE.Mesh(
+    new THREE.BoxGeometry(L + 2 * EXT, h + 0.035, DEPTH),
+    fasciaPanelMaterial(palette.casing),
   );
-  grp.add(cabinet);
-  const offset = PANEL_T / 2 + 0.34;
-  const displayZ = zc - Math.min(0.32, h * 0.22); // hang below pitched-roof fascia
+  backing.position.z = -0.012; grp.add(backing);
+  const joint = Math.min(0.014, bayW * 0.018);
+  for (let i = 0; i < bayCount; i++) {
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.max(0.08, bayW - joint), h, DEPTH * 0.72),
+      fasciaPanelMaterial(palette.panel),
+    );
+    panel.position.set(-L / 2 + bayW * (i + 0.5), 0, DEPTH * 0.42);
+    grp.add(panel);
+  }
+
+  // Rails are independent continuous extrusions: panel joints stop at them.
+  for (const rail of palette.rails) {
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(L + 2 * EXT, h * rail.h, DEPTH * 0.74),
+      fasciaPanelMaterial(rail.color),
+    );
+    strip.position.set(0, h * rail.y, DEPTH * 0.82); grp.add(strip);
+  }
+
+  if (face.role === 'frontage') {
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const tangent = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+    const entryX = entrances.length
+      ? entrances.reduce((sum, p) => sum + (p.pos.x - mid.x) * tangent.x + (p.pos.y - mid.y) * tangent.y, 0) / entrances.length
+      : 0;
+    const logoW = Math.min(L * 0.42, Math.max(bayW * 2.45, h * 3.9));
+    const logoH = h * 0.76;
+    const safeX = THREE.MathUtils.clamp(entryX, -L / 2 + logoW / 2 + 0.08, L / 2 - logoW / 2 - 0.08);
+    const logo = signBoard(
+      logoW, logoH, 0.105,
+      signFaceMaterial(brand, logoId, 'wall', logoW / logoH),
+      { doubleSided: false, frame: 0.022, casingColor: palette.casing, radius: 0.018 },
+    );
+    logo.position.set(safeX, 0.025, DEPTH + 0.065); grp.add(logo);
+
+    // A small, separate service banner sits over another set of glazing bays.
+    if (L >= 7) {
+      const promoW = Math.min(L * 0.32, Math.max(2.8, bayW * 2.2));
+      const promoH = Math.min(0.48, h * 0.48);
+      const target = safeX > 0 ? -L * 0.23 : L * 0.23;
+      const promoX = THREE.MathUtils.clamp(target, -L / 2 + promoW / 2, L / 2 - promoW / 2);
+      const promo = signBoard(
+        promoW, promoH, 0.065,
+        signFaceMaterial(brand, logoId, 'promo', promoW / promoH),
+        { doubleSided: false, frame: 0.018, casingColor: palette.casing, radius: 0.012 },
+      );
+      promo.position.set(promoX, -h / 2 - promoH / 2 - 0.11, DEPTH + 0.025); grp.add(promo);
+    }
+  }
+
+  const offset = PANEL_T / 2 + 0.055;
+  const displayZ = zc - Math.min(0.2, h * 0.14);
   const pos = toThree((a.x + b.x) / 2, (a.y + b.y) / 2, displayZ).add(zAxis.clone().multiplyScalar(offset));
   const m = new THREE.Matrix4().makeBasis(xAxis, up, zAxis);
   m.setPosition(pos);

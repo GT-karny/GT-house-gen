@@ -436,6 +436,42 @@ export function fasciaMaterial(brand: number, logoId = 0, aspect = 5): THREE.Mat
     });
   });
 }
+
+export interface FasciaVisual {
+  panel: number;
+  casing: number;
+  rails: ReadonlyArray<{ y: number; h: number; color: number }>;
+}
+
+/** Construction palette for a Japanese chain-store fascia. Positions are
+ * normalized to the panel height, with y=0 at the panel centre. Keeping this
+ * separate from the logo canvas lets the rails continue across panel joints. */
+export function fasciaVisual(logoId: number, fallback = 0x39434a): FasciaVisual {
+  if (logoId === 2) return {
+    panel: 0xf2eee2, casing: 0x4a4e4f,
+    rails: [{ y: -0.43, h: 0.14, color: 0xe97535 }],
+  };
+  if (logoId === 3) return {
+    panel: 0xf4f6f3, casing: 0x4b5155,
+    rails: [
+      { y: 0.44, h: 0.1, color: 0x54b47a },
+      { y: -0.405, h: 0.055, color: 0x28a9ca },
+      { y: -0.475, h: 0.085, color: 0x1763aa },
+    ],
+  };
+  if (logoId === 7) return {
+    panel: 0xa82d39, casing: 0x282d32,
+    rails: [{ y: -0.44, h: 0.12, color: 0xe7c452 }],
+  };
+  return { panel: fallback, casing: 0x2c3237, rails: [] };
+}
+
+/** Plain coated sign-panel material used behind separately modelled graphics. */
+export function fasciaPanelMaterial(color: number): THREE.Material {
+  return std(`fascia-panel:${color}`, {
+    color, roughness: 0.57, metalness: 0.08, envMapIntensity: 0.72,
+  });
+}
 export const foliageMaterial = () => memo('foliage', () => pbr('foliage', 2, { color: 0x86a55f, roughness: 1 }));
 export const trunkMaterial = () => memo('trunk', () => pbr('bark', 1, { roughness: 0.9 }));
 export const propMaterial = (c: number) => std(`prop:${c}`, { color: c, roughness: 0.7, metalness: 0.15 });

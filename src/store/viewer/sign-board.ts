@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { signBoxMaterial } from './materials';
 
 /**
@@ -10,12 +11,15 @@ export function signBoard(
   height: number,
   depth: number,
   faceMaterial: THREE.Material,
-  options: { doubleSided?: boolean; frame?: number; casingColor?: number } = {},
+  options: { doubleSided?: boolean; frame?: number; casingColor?: number; radius?: number } = {},
 ): THREE.Group {
   const g = new THREE.Group();
   const frame = Math.min(options.frame ?? 0.07, width * 0.08, height * 0.08);
+  const radius = Math.min(options.radius ?? 0, width * 0.2, height * 0.2, depth * 0.45);
   const casing = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, depth),
+    radius > 0
+      ? new RoundedBoxGeometry(width, height, depth, 3, radius)
+      : new THREE.BoxGeometry(width, height, depth),
     signBoxMaterial(options.casingColor ?? 0x252a30),
   );
   casing.castShadow = true;
@@ -35,4 +39,3 @@ export function signBoard(
   }
   return g;
 }
-

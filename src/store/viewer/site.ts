@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import type { StoreSitePlan, SiteRect, StoreProp, FenceSpan, SignInstance, ParkingStall, Vec2, StoreZoneKind } from '../gen/types';
 import {
   zoneMaterial, stripeMaterial, accessibleMaterial, carPaintMaterial, carGlassMaterial, tireMaterial,
-  poleMaterial, pylonPoleMaterial, signBoxMaterial, signFaceMaterial, metalMaterial, lampMaterial, foliageMaterial, trunkMaterial, propMaterial, curbMaterial,
+  poleMaterial, pylonPoleMaterial, signBoxMaterial, signFaceMaterial, fasciaVisual, metalMaterial, lampMaterial, foliageMaterial, trunkMaterial, propMaterial, curbMaterial,
 } from './materials';
 import { signBoard } from './sign-board';
 
@@ -112,19 +112,50 @@ function signMesh(s: SignInstance): THREE.Object3D {
   const face = { x: Math.cos(yaw), y: Math.sin(yaw) };
   const tangent = { x: -face.y, y: face.x };
   if (s.kind === 'pylon') {
-    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.4, s.poleH, 0.4), pylonPoleMaterial());
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, s.poleH, 16), pylonPoleMaterial());
     pole.position.y = s.poleH / 2; pole.castShadow = true; g.add(pole);
-    const board = signBoard(s.w, s.h, 0.3, signFaceMaterial(s.color, s.logoId, 'pylon', s.w / s.h), { frame: 0.035 });
-    board.position.y = s.poleH + s.h / 2; g.add(board);
+    const palette = fasciaVisual(s.logoId, s.color);
+    let top = s.poleH;
+    let litWidth = s.w;
+    const addCabinet = (
+      width: number, height: number, bottom: number, role: 'square' | 'blade' | 'pylon' | 'promo', radius = 0.025,
+    ) => {
+      const board = signBoard(
+        width, height, 0.3,
+        signFaceMaterial(s.color, s.logoId, role, width / height),
+        { frame: 0.035, casingColor: palette.casing, radius },
+      );
+      board.position.y = bottom + height / 2; g.add(board);
+      top = Math.max(top, bottom + height); litWidth = Math.max(litWidth, width);
+    };
+
+    if (s.logoId === 2) {
+      // ホームセンター: a broad old-style billboard with a merchandise box.
+      const serviceH = s.h * 0.18;
+      addCabinet(s.w * 1.08, serviceH, s.poleH, 'promo', 0.015);
+      addCabinet(s.w * 1.08, s.h * 0.72, s.poleH + serviceH + 0.1, 'square', 0.025);
+    } else if (s.logoId === 3) {
+      // コンビニ: almost-square illuminated badge and a distinct ATM cabinet.
+      const serviceH = s.h * 0.2;
+      const badge = Math.min(s.w * 1.03, s.h * 0.62);
+      addCabinet(s.w * 0.94, serviceH, s.poleH, 'promo', 0.035);
+      addCabinet(badge, badge, s.poleH + serviceH + 0.12, 'square', 0.12);
+    } else if (s.logoId === 7) {
+      // 飲食店: tall drive-through tower, closer to Japanese roadside examples.
+      const serviceH = s.h * 0.18;
+      addCabinet(s.w * 0.88, serviceH, s.poleH, 'promo', 0.035);
+      addCabinet(s.w * 0.86, s.h * 0.72, s.poleH + serviceH + 0.09, 'blade', 0.055);
+    } else {
+      addCabinet(s.w, s.h, s.poleH, 'pylon');
+    }
     // Older Japanese home centres and roadside shops often light tall pylons
     // externally from a small rail above the cabinet. This also makes the sign
     // read as installed equipment rather than a texture on a box.
-    const top = s.poleH + s.h;
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(s.w * 0.88, 0.055, 0.055), metalMaterial());
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(litWidth * 0.88, 0.055, 0.055), metalMaterial());
     rail.position.set(0, top + 0.28, 0); g.add(rail);
-    const lights = s.w >= 2.8 ? [-0.32, 0, 0.32] : [-0.28, 0.28];
+    const lights = litWidth >= 2.8 ? [-0.32, 0, 0.32] : [-0.28, 0.28];
     for (const u of lights) {
-      const x = u * s.w;
+      const x = u * litWidth;
       const upright = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.3, 0.045), metalMaterial());
       upright.position.set(x, top + 0.15, 0); g.add(upright);
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.34), metalMaterial());
