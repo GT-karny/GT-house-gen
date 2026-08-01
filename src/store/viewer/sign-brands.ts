@@ -241,20 +241,24 @@ function drawKurashikan(ctx: Ctx, w: number, h: number, b: PilotBrandSpec, role:
   ctx.fillStyle = horizontal ? b.secondary : b.surface; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = b.primary; ctx.fillRect(0, horizontal ? h * 0.86 : h * 0.9, w, h * 0.14);
   if (horizontal) {
-    const mark = h * 0.64, left = Math.max(w * 0.055, (w - Math.min(w * 0.78, h * 5.1)) / 2);
+    const mark = h * 0.76;
+    ctx.fillStyle = b.surface; ctx.textBaseline = 'middle';
+    const px = fontToFit(ctx, b.name, w - mark - h * 0.2, h * 0.66, b.font, b.weight);
+    ctx.font = `${b.weight} ${px}px ${b.font}`;
+    const wordW = ctx.measureText(b.name).width;
+    const total = mark + h * 0.1 + wordW;
+    const left = Math.max(w * 0.018, (w - total) / 2);
     drawBeamK(ctx, left + mark / 2, h * 0.44, mark, b.primary, b.surface);
     ctx.fillStyle = b.surface; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    fontToFit(ctx, b.name, w - left - mark - h * 0.35, h * 0.52, b.font, b.weight);
-    ctx.fillText(b.name, left + mark + h * 0.22, h * 0.48);
-    if (w / h > 4.2) drawCategory(ctx, `${b.category}  ${b.latin}`, left + mark + h * 0.24, h * 0.18, h * 0.095, b.accent);
+    ctx.fillText(b.name, left + mark + h * 0.1, h * 0.46);
   } else {
-    const mark = Math.min(w * 0.68, h * 0.38);
-    drawBeamK(ctx, w / 2, h * 0.25, mark, b.primary, b.surface);
+    const mark = Math.min(w * 0.82, h * 0.46);
+    drawBeamK(ctx, w / 2, h * 0.27, mark, b.primary, b.surface);
     ctx.fillStyle = b.secondary; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const label = role === 'blade' ? 'くらし' : b.name;
-    fontToFit(ctx, label, w * 0.86, h * 0.15, b.font, b.weight);
-    ctx.fillText(label, w / 2, h * 0.59);
-    drawCategory(ctx, b.category, w / 2, h * 0.76, h * 0.052, b.primary, 'center');
+    fontToFit(ctx, label, w * 0.96, h * 0.2, b.font, b.weight);
+    ctx.fillText(label, w / 2, h * 0.65);
+    drawCategory(ctx, b.category, w / 2, h * 0.82, h * 0.07, b.primary, 'center');
   }
 }
 
@@ -266,23 +270,23 @@ function drawMachiPort(ctx: Ctx, w: number, h: number, b: PilotBrandSpec, role: 
   ctx.fillStyle = b.accent; ctx.fillRect(0, h * (horizontal ? 0.85 : 0.9), w, h * 0.055);
   ctx.fillStyle = b.primary; ctx.fillRect(0, h * (horizontal ? 0.905 : 0.955), w, h * 0.095);
   if (horizontal) {
-    const mark = h * 0.6;
+    const mark = h * 0.72;
     ctx.fillStyle = b.primary; ctx.textBaseline = 'middle';
-    const px = fontToFit(ctx, b.name, w * 0.56, h * 0.45, b.font, b.weight);
+    const px = fontToFit(ctx, b.name, w - mark - h * 0.18, h * 0.61, b.font, b.weight);
     ctx.font = `${b.weight} ${px}px ${b.font}`;
     const wordW = ctx.measureText(b.name).width;
-    const total = mark + h * 0.18 + wordW;
-    const left = Math.max(w * 0.05, (w - total) / 2);
+    const total = mark + h * 0.09 + wordW;
+    const left = Math.max(w * 0.018, (w - total) / 2);
     drawMachiGate(ctx, left + mark / 2, h * 0.46, mark, b.primary, b.secondary);
     ctx.fillStyle = b.primary;
-    ctx.textAlign = 'left'; ctx.fillText(b.name, left + mark + h * 0.18, h * 0.48);
+    ctx.textAlign = 'left'; ctx.fillText(b.name, left + mark + h * 0.09, h * 0.48);
   } else {
-    const mark = Math.min(w * 0.7, h * 0.35);
-    drawMachiGate(ctx, w / 2, h * 0.25, mark, b.primary, b.secondary);
+    const mark = Math.min(w * 0.84, h * 0.44);
+    drawMachiGate(ctx, w / 2, h * 0.28, mark, b.primary, b.secondary);
     ctx.fillStyle = b.primary; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const label = role === 'blade' ? b.shortName : b.name;
-    fontToFit(ctx, label, w * 0.88, h * 0.12, b.font, b.weight);
-    ctx.fillText(label, w / 2, h * 0.55);
+    fontToFit(ctx, label, w * 0.96, h * 0.2, b.font, b.weight);
+    ctx.fillText(label, w / 2, h * 0.67);
   }
 }
 
@@ -292,24 +296,23 @@ function drawGrillBuns(ctx: Ctx, w: number, h: number, b: PilotBrandSpec, role: 
   ctx.fillStyle = b.primary; ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = b.secondary; ctx.fillRect(0, h * (horizontal ? 0.88 : 0.92), w, h * (horizontal ? 0.12 : 0.08));
   if (horizontal) {
-    const mark = h * 0.67;
+    const mark = h * 0.76;
     ctx.fillStyle = b.accent; ctx.textBaseline = 'middle';
-    const px = fontToFit(ctx, b.latin, w * 0.62, h * 0.43, b.font, b.weight);
+    const px = fontToFit(ctx, b.name, w - mark - h * 0.18, h * 0.57, b.font, b.weight);
     ctx.font = `${b.weight} ${px}px ${b.font}`;
-    const wordW = ctx.measureText(b.latin).width;
-    const total = mark + h * 0.2 + wordW;
-    const left = Math.max(w * 0.05, (w - total) / 2);
+    const wordW = ctx.measureText(b.name).width;
+    const total = mark + h * 0.09 + wordW;
+    const left = Math.max(w * 0.018, (w - total) / 2);
     drawBunMark(ctx, left + mark / 2, h * 0.45, mark, b.accent, b.secondary);
-    ctx.textAlign = 'left'; ctx.fillText(b.latin, left + mark + h * 0.2, h * 0.43);
-    drawCategory(ctx, b.name, left + mark + h * 0.22, h * 0.7, h * 0.105, b.accent);
+    ctx.textAlign = 'left'; ctx.fillText(b.name, left + mark + h * 0.09, h * 0.46);
   } else {
-    const mark = Math.min(w * 0.82, h * 0.43);
-    drawBunMark(ctx, w / 2, h * 0.27, mark, b.accent, b.secondary);
+    const mark = Math.min(w * 0.9, h * 0.49);
+    drawBunMark(ctx, w / 2, h * 0.29, mark, b.accent, b.secondary);
     ctx.fillStyle = b.accent; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const label = role === 'blade' ? b.shortName : b.name;
-    fontToFit(ctx, label, w * 0.88, h * 0.115, b.font, b.weight);
-    ctx.fillText(label, w / 2, h * 0.58);
-    drawCategory(ctx, b.category, w / 2, h * 0.75, h * 0.055, b.accent, 'center');
+    fontToFit(ctx, label, w * 0.96, h * 0.18, b.font, b.weight);
+    ctx.fillText(label, w / 2, h * 0.67);
+    drawCategory(ctx, b.category, w / 2, h * 0.83, h * 0.065, b.accent, 'center');
   }
 }
 

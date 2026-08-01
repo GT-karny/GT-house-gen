@@ -112,8 +112,6 @@ function signMesh(s: SignInstance): THREE.Object3D {
   const face = { x: Math.cos(yaw), y: Math.sin(yaw) };
   const tangent = { x: -face.y, y: face.x };
   if (s.kind === 'pylon') {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, s.poleH, 16), pylonPoleMaterial());
-    pole.position.y = s.poleH / 2; pole.castShadow = true; g.add(pole);
     const palette = fasciaVisual(s.logoId, s.color);
     let top = s.poleH;
     let litWidth = s.w;
@@ -148,6 +146,12 @@ function signMesh(s: SignInstance): THREE.Object3D {
     } else {
       addCabinet(s.w, s.h, s.poleH, 'pylon');
     }
+    // One continuous rear column physically carries every separated cabinet.
+    // It intersects their backs and stays visible through the deliberate gaps.
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.23, top, 16), pylonPoleMaterial());
+    pole.position.set(0, top / 2, -0.2); pole.castShadow = true; g.add(pole);
+    const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.08, 16), metalMaterial());
+    flange.position.set(0, 0.04, -0.2); flange.castShadow = true; g.add(flange);
     // Older Japanese home centres and roadside shops often light tall pylons
     // externally from a small rail above the cabinet. This also makes the sign
     // read as installed equipment rather than a texture on a box.

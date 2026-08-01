@@ -283,15 +283,17 @@ function bandMesh(face: WallFace, panels: StorePanel[], brand: number, logoId: n
     const entryX = entrances.length
       ? entrances.reduce((sum, p) => sum + (p.pos.x - mid.x) * tangent.x + (p.pos.y - mid.y) * tangent.y, 0) / entrances.length
       : 0;
-    const logoW = Math.min(L * 0.42, Math.max(bayW * 2.45, h * 3.9));
-    const logoH = h * 0.76;
+    const logoW = Math.min(L * 0.52, Math.max(bayW * 3.35, h * 4.8));
+    const logoH = h * 0.9;
     const safeX = THREE.MathUtils.clamp(entryX, -L / 2 + logoW / 2 + 0.08, L / 2 - logoW / 2 - 0.08);
     const logo = signBoard(
       logoW, logoH, 0.105,
       signFaceMaterial(brand, logoId, 'wall', logoW / logoH),
       { doubleSided: false, frame: 0.022, casingColor: palette.casing, radius: 0.018 },
     );
-    logo.position.set(safeX, 0.025, DEPTH + 0.065); grp.add(logo);
+    // Seat the cabinet directly on the panel face; no unexplained air gap.
+    const panelFront = DEPTH * 0.78;
+    logo.position.set(safeX, 0.025, panelFront + 0.105 / 2 - 0.002); grp.add(logo);
 
     // A small, separate service banner sits over another set of glazing bays.
     if (L >= 7) {
@@ -304,7 +306,16 @@ function bandMesh(face: WallFace, panels: StorePanel[], brand: number, logoId: n
         signFaceMaterial(brand, logoId, 'promo', promoW / promoH),
         { doubleSided: false, frame: 0.018, casingColor: palette.casing, radius: 0.012 },
       );
-      promo.position.set(promoX, -h / 2 - promoH / 2 - 0.11, DEPTH + 0.025); grp.add(promo);
+      const promoY = -h / 2 - promoH / 2 - 0.015;
+      promo.position.set(promoX, promoY, DEPTH + 0.025); grp.add(promo);
+      // two short hangers make the lower cabinet visibly part of the fascia
+      for (const x of [promoX - promoW * 0.36, promoX + promoW * 0.36]) {
+        const hanger = new THREE.Mesh(
+          new THREE.BoxGeometry(0.045, 0.09, 0.045),
+          fasciaPanelMaterial(palette.casing),
+        );
+        hanger.position.set(x, -h / 2 - 0.015, DEPTH * 0.5); grp.add(hanger);
+      }
     }
   }
 
