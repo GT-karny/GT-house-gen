@@ -22,6 +22,14 @@ describe('streetscape plan', () => {
     expect(s.props.length).toBe(0);
   });
 
+  it('derives internal lane markings from one to four lanes', () => {
+    for (let lanes = 1; lanes <= 4; lanes++) {
+      const s = planStreetscape(BOUNDS, { ...DEFAULT_STREET, laneCount: lanes });
+      // Two edge lines plus one divider between every adjacent lane.
+      expect(s.markings).toHaveLength(2 + lanes - 1);
+    }
+  });
+
   it('builds a non-empty Three group headlessly', () => {
     const g = streetscapeGroup(planStreetscape(BOUNDS, DEFAULT_STREET));
     expect(g.children.length).toBeGreaterThan(0);

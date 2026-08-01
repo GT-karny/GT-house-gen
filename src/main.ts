@@ -10,7 +10,10 @@ import { generateHouse, type GenerateOptions } from './gen/building';
 import { makeSampleLot, type LotShape } from './gen/lot';
 import { planStreetscape, DEFAULT_STREET, type StreetscapeConfig } from './env/streetscape';
 import { streetscapeGroup, disposeStreetscape } from './viewer/env';
-import { planRailway, DEFAULT_RAILWAY, type RailwayConfig } from './env/railway';
+import {
+  planRailway, DEFAULT_RAILWAY, resolveCrossingScenario,
+  type CrossingScenario, type RailwayConfig,
+} from './env/railway';
 import { railwayGroup, disposeRailway } from './viewer/railway';
 
 type StyleName = 'generic' | 'jp-tract' | 'jp-cube';
@@ -44,7 +47,75 @@ const view = {
 // Streetscape (public realm) config — SEPARATE from GenConfig so it never mixes
 // into the house data model / core. Lives in src/env.
 const street: StreetscapeConfig = { ...DEFAULT_STREET };
-const railway: RailwayConfig = { ...DEFAULT_RAILWAY };
+const railway: RailwayConfig = structuredClone(DEFAULT_RAILWAY);
+const crossingScenario: CrossingScenario = {
+  railwayClass: 'regional',
+  roadClass: 'collector',
+  context: 'suburban',
+  history: 'modern',
+};
+
+function applyCrossingScenario() {
+  const resolved = resolveCrossingScenario({
+    ...crossingScenario,
+    seed: cfg.seed,
+    // Placement is a public site-specific input, not a scenario-derived value.
+    overrides: { placement: railway.placement },
+  });
+  railway.seed = resolved.config.seed;
+  Object.assign(railway.placement, resolved.config.placement);
+  Object.assign(railway.railway, resolved.config.railway);
+  Object.assign(railway.surface, resolved.config.surface);
+  Object.assign(railway.protection, resolved.config.protection);
+  Object.assign(railway.operational, resolved.config.operational);
+  street.laneCount = resolved.road.lanes.length;
+  street.roadWidth = resolved.road.lanes.reduce((sum, lane) => sum + lane.widthM, 0)
+    + resolved.road.leftShoulderM + resolved.road.rightShoulderM + resolved.road.medianWidthM;
+  street.walkWidth = resolved.road.leftSidewalkM;
+  street.farWidth = resolved.road.rightSidewalkM;
+}
+
+function restoreCrossingUrlState() {
+  const params = new URLSearchParams(location.search);
+  const seedParam = params.get('seed');
+  const seed = seedParam === null ? NaN : Number(seedParam);
+  if (Number.isInteger(seed) && seed >= 0) cfg.seed = seed;
+  const railwayClass = params.get('railwayClass');
+  if (railwayClass === 'branch' || railwayClass === 'regional' || railwayClass === 'suburban' || railwayClass === 'trunk') crossingScenario.railwayClass = railwayClass;
+  const roadClass = params.get('roadClass');
+  if (roadClass === 'footpath' || roadClass === 'local' || roadClass === 'collector' || roadClass === 'arterial') crossingScenario.roadClass = roadClass;
+  const context = params.get('context');
+  if (context === 'rural' || context === 'suburban' || context === 'urban') crossingScenario.context = context;
+  const scenarioHistory = params.get('history');
+  if (scenarioHistory === 'modern' || scenarioHistory === 'legacy') crossingScenario.history = scenarioHistory;
+  applyCrossingScenario();
+  const angleParam = params.get('crossingAngle');
+  const angle = angleParam === null ? NaN : Number(angleParam);
+  if (Number.isFinite(angle)) railway.placement.crossingAngleDeg = angle;
+  const tracksParam = params.get('tracks');
+  const tracks = tracksParam === null ? NaN : Number(tracksParam);
+  if (Number.isInteger(tracks)) railway.railway.trackCount = tracks;
+  const protection = params.get('protection');
+  if (protection === 'class1' || protection === 'class3' || protection === 'class4') {
+    railway.protection.protectionClass = protection;
+  }
+}
+
+function updateCrossingUrlState() {
+  const params = new URLSearchParams(location.search);
+  params.set('seed', String(cfg.seed));
+  params.delete('crossing');
+  params.set('railwayClass', crossingScenario.railwayClass);
+  params.set('roadClass', crossingScenario.roadClass);
+  params.set('context', crossingScenario.context);
+  params.set('history', crossingScenario.history);
+  params.set('crossingAngle', String(railway.placement.crossingAngleDeg));
+  params.set('tracks', String(railway.railway.trackCount));
+  params.set('protection', railway.protection.protectionClass);
+  history.replaceState(null, '', `${location.pathname}?${params.toString()}${location.hash}`);
+}
+
+restoreCrossingUrlState();
 
 // randomisation palettes (picked per seed when the control is on 'auto')
 const ROOF_COLORS = [0x3b3d42, 0x4a4d53, 0x2f3136, 0x5a4b3a, 0x6b6560, 0x7a3f36]; // 黒/濃灰/灰/茶/瓦/レンガ
@@ -162,6 +233,7 @@ let pendingFrame = true; // reframe only when the row STRUCTURE changes (not on 
 
 function regenerate() {
   const n = Math.max(1, Math.round(view.rowCount));
+  updateCrossingUrlState();
   const root = new THREE.Group();
 
   // lay houses left→right along the street (+X). Each lot is contiguous with the
@@ -248,10 +320,13 @@ function rebuildStreet(totalW: number, built: BuiltHouse[]) {
       roadNearY,
       roadFarY,
       farEdgeY: roadFarY - street.farWidth,
-    }, { ...railway, seed: cfg.seed });
+      roadLaneCount: street.laneCount,
+    }, { ...structuredClone(railway), seed: cfg.seed });
     railPlan = plannedRail;
     // Do not place a utility pole inside the railway/crossing equipment envelope.
-    plan.props = plan.props.filter((p) => Math.abs(p.center.x - plannedRail.centerX) > railway.ballastWidth / 2 + 1.2);
+    plan.props = plan.props.filter((p) =>
+      p.center.x < plannedRail.equipmentEnvelope.xMin || p.center.x > plannedRail.equipmentEnvelope.xMax,
+    );
   }
   const g = streetscapeGroup(plan);
   viewer.env.add(g);
@@ -267,10 +342,14 @@ function rebuildStreet(totalW: number, built: BuiltHouse[]) {
 /** Tight inspection view centred on the crossing safety equipment. */
 function frameCrossing() {
   if (!currentRailPlan) return;
-  const [near, far] = currentRailPlan.devices;
-  const targetX = (near.center.x + far.center.x) / 2;
-  const targetY = (near.center.y + far.center.y) / 2;
-  const mastHeight = Math.max(near.mastHeight, far.mastHeight);
+  const devices = currentRailPlan.devices;
+  const targetX = devices.length
+    ? devices.reduce((sum, d) => sum + d.center.x, 0) / devices.length
+    : currentRailPlan.center.x;
+  const targetY = devices.length
+    ? devices.reduce((sum, d) => sum + d.center.y, 0) / devices.length
+    : currentRailPlan.center.y;
+  const mastHeight = devices.length ? Math.max(...devices.map((d) => d.mastHeight)) : 3;
   viewer.controls.target.set(targetX, mastHeight * 0.50, -targetY);
   viewer.camera.position.set(targetX + 8.3, mastHeight + 2.5, -targetY + 9.4);
   viewer.camera.updateProjectionMatrix();
@@ -280,8 +359,9 @@ function frameCrossing() {
 /** Close inspection of one independent electric gate machine and its drive. */
 function frameGateMachine() {
   if (!currentRailPlan) return;
-  const device = currentRailPlan.devices[0];
-  const side = device.gateCenter.x < currentRailPlan.centerX ? -1 : 1;
+  const device = currentRailPlan.devices.find((d) => d.hasGate);
+  if (!device) return;
+  const side = device.gateCenter.x < currentRailPlan.center.x ? -1 : 1;
   const x = device.gateCenter.x;
   const z = -device.gateCenter.y;
   viewer.controls.target.set(x, 0.82, z);
@@ -296,11 +376,16 @@ function frameStreet(spanX: number, depth: number) {
   let xMin = -spanX / 2;
   let xMax = spanX / 2;
   if (view.showStreet && view.showRailway) {
-    const crossingX = railway.crossingSide === 'right'
-      ? xMax + railway.crossingOffset
-      : xMin - railway.crossingOffset;
-    xMin = Math.min(xMin, crossingX - railway.ballastWidth / 2 - 2);
-    xMax = Math.max(xMax, crossingX + railway.ballastWidth / 2 + 2);
+    if (currentRailPlan) {
+      xMin = Math.min(xMin, currentRailPlan.equipmentEnvelope.xMin - 2);
+      xMax = Math.max(xMax, currentRailPlan.equipmentEnvelope.xMax + 2);
+    } else {
+      const crossingX = railway.placement.crossingSide === 'right'
+        ? xMax + railway.placement.crossingOffsetM
+        : xMin - railway.placement.crossingOffsetM;
+      xMin = Math.min(xMin, crossingX - railway.railway.ballastWidthM / 2 - 2);
+      xMax = Math.max(xMax, crossingX + railway.railway.ballastWidthM / 2 + 2);
+    }
   }
   const targetX = (xMin + xMax) / 2;
   const half = Math.max(xMax - xMin, depth) / 2;
@@ -339,8 +424,17 @@ function applyStyle(style: StyleName) {
 // ---- GUI ----
 const gui = new GUI({ title: 'House-Gen' });
 gui.add(view, 'style', ['generic', 'jp-tract', 'jp-cube']).name('★ style preset').onChange(applyStyle);
-gui.add(cfg, 'seed', 0, 9999, 1).onChange(regenerate);
-gui.add({ shuffle: () => { cfg.seed = (cfg.seed + 1) % 10000; gui.controllersRecursive().forEach((c) => c.updateDisplay()); regenerate(); } }, 'shuffle').name('▶ next seed');
+gui.add(cfg, 'seed', 0, 9999, 1).onChange(() => {
+  applyCrossingScenario();
+  gui.controllersRecursive().forEach((controller) => controller.updateDisplay());
+  regenerate();
+});
+gui.add({ shuffle: () => {
+  cfg.seed = (cfg.seed + 1) % 10000;
+  applyCrossingScenario();
+  gui.controllersRecursive().forEach((controller) => controller.updateDisplay());
+  regenerate();
+} }, 'shuffle').name('▶ next seed');
 
 const reframe = () => { pendingFrame = true; regenerate(); };
 const fRow = gui.addFolder('Street (通り)');
@@ -354,22 +448,45 @@ fRow.add({ fit: reframe }, 'fit').name('🎥 通りにカメラを合わせる')
 const fStreet = gui.addFolder('Street env (前面道路)');
 fStreet.add(view, 'showStreet').name('道路/歩道/電柱 表示').onChange(regenerate);
 fStreet.add(street, 'roadWidth', 3, 9, 0.5).name('車道幅 m').onChange(regenerate);
-fStreet.add(street, 'walkWidth', 0, 4, 0.2).name('歩道/路肩幅 m').onChange(regenerate);
+fStreet.add(street, 'laneCount', 1, 4, 1).name('車線数').onChange(regenerate);
+fStreet.add(street, 'walkWidth', 0, 4, 0.2).name('住宅側 歩道/路肩 m').onChange(regenerate);
+fStreet.add(street, 'farWidth', 0, 4, 0.2).name('反対側 歩道/路肩 m').onChange(regenerate);
 fStreet.add(street, 'centerLine').name('センターライン').onChange(regenerate);
 fStreet.add(street, 'poleSpacing', 0, 30, 1).name('電柱間隔 m (0=なし)').onChange(regenerate);
 
 const fRail = gui.addFolder('Railway (日本の踏切)');
 fRail.add(view, 'showRailway').name('線路/踏切 表示').onChange(reframe);
-fRail.add(railway, 'crossingSide', ['left', 'right']).name('住宅列の左右').onChange(reframe);
-fRail.add(railway, 'crossingOffset', 4, 20, 0.5).name('住宅列からの距離 m').onChange(reframe);
-fRail.add(railway, 'gauge', { '狭軌 1,067 mm': 1.067, '標準軌 1,435 mm': 1.435 }).name('軌間').onChange(regenerate);
-fRail.add(railway, 'barrierClosed').name('遮断かんを閉じる').onChange(regenerate);
-fRail.add(railway, 'warningActive').name('警報灯・方向表示を作動').onChange(regenerate);
-fRail.add(railway, 'electrified').name('電化柱・架線').onChange(regenerate);
-fRail.add(railway, 'sleeperType', { 'PCまくらぎ': 'pc', '木まくらぎ': 'wood' }).name('まくらぎ').onChange(regenerate);
-fRail.add(railway, 'safetyEquipment', { '高設備踏切': 'full', '基本設備のみ': 'basic' }).name('保安装置').onChange(regenerate);
+const updateCrossingScenario = () => {
+  applyCrossingScenario();
+  gui.controllersRecursive().forEach((controller) => controller.updateDisplay());
+  reframe();
+};
+fRail.add(crossingScenario, 'railwayClass', ['branch', 'regional', 'suburban', 'trunk']).name('鉄道クラス').onChange(updateCrossingScenario);
+fRail.add(crossingScenario, 'roadClass', ['footpath', 'local', 'collector', 'arterial']).name('道路クラス').onChange(updateCrossingScenario);
+fRail.add(crossingScenario, 'context', ['rural', 'suburban', 'urban']).name('地域コンテキスト').onChange(updateCrossingScenario);
+fRail.add(crossingScenario, 'history', ['modern', 'legacy']).name('年代条件').onChange(updateCrossingScenario);
+// Site-specific placement cannot be inferred reliably from a crossing
+// scenario, so keep it alongside the public top-level controls.
+fRail.add(railway.placement, 'crossingSide', ['left', 'right']).name('住宅列の左右').onChange(reframe);
+fRail.add(railway.placement, 'crossingOffsetM', 4, 20, 0.5).name('住宅列からの距離 m').onChange(reframe);
+fRail.add(railway.placement, 'crossingAngleDeg', 30, 90, 1).name('交差角 deg').onChange(reframe);
+fRail.add(railway.runtime, 'barrierClosed').name('遮断かんを閉じる').onChange(regenerate);
+fRail.add(railway.runtime, 'warningActive').name('警報灯・方向表示を作動').onChange(regenerate);
 fRail.add({ focus: frameCrossing }, 'focus').name('🎥 踏切設備に接近');
 fRail.add({ focus: frameGateMachine }, 'focus').name('🎥 遮断機を接写');
+
+const fRailDetail = fRail.addFolder('詳細オーバーライド');
+fRailDetail.add(railway.railway, 'trackCount', 1, 4, 1).name('線路数').onChange(reframe);
+fRailDetail.add(railway.railway, 'trackCenterSpacingM', 2.5, 6, 0.1).name('線路中心間隔 m').onChange(reframe);
+fRailDetail.add(railway.railway, 'gaugeM', { '狭軌 1,067 mm': 1.067, '標準軌 1,435 mm': 1.435 }).name('軌間').onChange(regenerate);
+fRailDetail.add(railway.surface, 'deckType', ['asphalt', 'concrete', 'rubber']).name('踏切舗装').onChange(regenerate);
+fRailDetail.add(railway.protection, 'protectionClass', ['class1', 'class3', 'class4']).name('踏切種別').onChange(regenerate);
+fRailDetail.add(railway.protection, 'gateLayout', ['none', 'half-road', 'split-entry-exit']).name('遮断方式').onChange(regenerate);
+fRailDetail.add(railway.protection, 'warningLayout', ['none', 'two-mast', 'four-mast']).name('警報機配置').onChange(regenerate);
+fRailDetail.add(railway.railway, 'electrification', ['overhead', 'none']).name('電化方式').onChange(regenerate);
+fRailDetail.add(railway.railway, 'sleeperType', { 'PCまくらぎ': 'pc', '木まくらぎ': 'wood' }).name('まくらぎ').onChange(regenerate);
+fRailDetail.add(railway.protection, 'equipmentLevel', { '高設備踏切': 'full', '基本設備のみ': 'basic' }).name('保安装置').onChange(regenerate);
+fRailDetail.close();
 
 const fLot = gui.addFolder('Lot (敷地)');
 fLot.add(view, 'lotShape', ['rectangle', 'irregular-quad', 'rounded-corner', 'chamfered'])

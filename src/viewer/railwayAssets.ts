@@ -6,6 +6,10 @@ const ASSET_URL = 'models/jp_crossing_equipment.glb';
 // The authored pole is the 4.27 m SC-4 assembly. Runtime scaling starts from
 // this real product length rather than from a rounded modelling dimension.
 const BASE_ARM_LENGTH = 4.27;
+// GateArmMesh is authored 0.34 m off the GateMachine origin in local Z. After
+// near/far gates are rotated in opposite directions this becomes a +/-X shift.
+// Move the machine root oppositely so all opposing arm centre-lines coincide.
+const AUTHORED_ARM_LATERAL_OFFSET = 0.34;
 let templatePromise: Promise<THREE.Group> | null = null;
 
 function loadTemplate(): Promise<THREE.Group> {
@@ -88,6 +92,27 @@ function configureGate(root: THREE.Object3D, device: CrossingDevice) {
   };
 }
 
+/** The authored gate arm extends along local +X. Rotate it so the arm points
+ *  from either roadside foundation into the carriageway. This must follow the
+ *  near/far road side, not the device's west/east placement: split-entry-exit
+ *  layouts contain two gates on the same west/east side with opposite arms. */
+export function gateYawForDevice(device: Pick<CrossingDevice, 'armDirY'>): number {
+  return device.armDirY < 0 ? -Math.PI / 2 : Math.PI / 2;
+}
+
+export function gatePlacementForDevice(device: Pick<CrossingDevice, 'armDirY' | 'gateCenter'>): {
+  x: number;
+  z: number;
+  yaw: number;
+} {
+  const yaw = gateYawForDevice(device);
+  return {
+    x: device.gateCenter.x - Math.sin(yaw) * AUTHORED_ARM_LATERAL_OFFSET,
+    z: -device.gateCenter.y,
+    yaw,
+  };
+}
+
 /** Replace procedural fallback devices with authored Blender equipment when loaded. */
 export function upgradeCrossingEquipment(
   parent: THREE.Group,
@@ -102,25 +127,33 @@ export function upgradeCrossingEquipment(
       const yaw = faceDirX > 0 ? Math.PI / 2 : -Math.PI / 2;
       const dirZ = -device.armDirY;
 
-      const warning = cloneRoot(template, 'WarningAssembly');
-      warning.name = 'blender-warning-assembly';
-      warning.position.set(device.center.x, 0, -device.center.y);
-      warning.rotation.y = yaw;
-      configureWarning(warning, device.warningActive);
+      const replacements: THREE.Object3D[] = [];
+      if (device.hasWarning) {
+        const warning = cloneRoot(template, 'WarningAssembly');
+        warning.name = 'blender-warning-assembly';
+        warning.position.set(device.center.x, 0, -device.center.y);
+        warning.rotation.y = yaw;
+        configureWarning(warning, device.warningActive);
+        replacements.push(warning);
 
-      const emergency = cloneRoot(template, 'EmergencyButton');
-      emergency.name = 'blender-emergency-button';
-      emergency.position.set(device.center.x, 0, -device.center.y - dirZ * 0.62);
-      emergency.rotation.y = yaw;
-
-      const gate = cloneRoot(template, 'GateMachine');
-      gate.name = 'blender-gate-machine';
-      gate.position.set(device.gateCenter.x, 0, -device.gateCenter.y);
-      gate.rotation.y = yaw;
-      configureGate(gate, device);
+        const emergency = cloneRoot(template, 'EmergencyButton');
+        emergency.name = 'blender-emergency-button';
+        emergency.position.set(device.center.x, 0, -device.center.y - dirZ * 0.62);
+        emergency.rotation.y = yaw;
+        replacements.push(emergency);
+      }
+      if (device.hasGate) {
+        const gate = cloneRoot(template, 'GateMachine');
+        const placement = gatePlacementForDevice(device);
+        gate.name = 'blender-gate-machine';
+        gate.position.set(placement.x, 0, placement.z);
+        gate.rotation.y = placement.yaw;
+        configureGate(gate, device);
+        replacements.push(gate);
+      }
 
       fallbacks[index].visible = false;
-      parent.add(warning, emergency, gate);
+      parent.add(...replacements);
     });
   }).catch((error) => {
     console.warn('Blender crossing equipment failed to load; keeping procedural fallback.', error);

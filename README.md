@@ -91,6 +91,11 @@ Lot ──► planSite ──► HousePad ──► generateFootprint ──► 
 
 ## 方針・今後の課題
 
+関連する調査・設計資料:
+
+- [日本の踏切プロシージャル生成 — パラメータ調査・設計・実装計画](docs/level-crossing-parametric-design.md)
+- [日本の集合住宅プロシージャル生成 — 調査・実装計画](docs/apartment-gen-research.md)
+
 - **建物ジオメトリの完全プロシージャル化**: 壁・窓・ドアの**モジュラーパネル（板アセット）に依存しない**、開口・框・水切り等まで**手続き的にジオメトリ生成**する方式へ。
 - **アセット利用でよいもの**: **テクスチャ／マテリアル・車・植物**などはアセット（CC0 等）に頼ってよい。プロシージャル化の対象は建物ジオメトリに限定する。
 - **純ロジックの再利用性**: `src/gen/` の純ロジック（`planSite` / `generateFootprint` / `generateFacade` / `buildRoofs`）は Three.js に依存しないため、他ランタイムへの移植・再利用がしやすい構成を維持する。`ComputeRoadAlignedOBB` 等の 2D ユーティリティも同様。

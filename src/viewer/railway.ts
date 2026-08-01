@@ -34,6 +34,16 @@ const signalPaint = pbr('metal', 2.8, { color: 0xffffff, roughness: 0.58, metaln
 signalPaint.vertexColors = true;
 const ledOff = new THREE.MeshPhysicalMaterial({ color: 0x350403, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.06 });
 
+/** Generation XY maps to Three XZ as (x, -y). Yaw for geometry authored along local +Z. */
+export function segmentYawToThree(a: Vec2, b: Vec2): number {
+  return Math.atan2(b.x - a.x, -(b.y - a.y));
+}
+
+/** Generation XY maps to Three XZ as (x, -y). Yaw for geometry authored along local +X. */
+export function xAxisYawToThree(a: Vec2, b: Vec2): number {
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
+
 function makeWarningStripeTexture(): THREE.DataTexture {
   const size = 128;
   const data = new Uint8Array(size * size * 4);
@@ -62,13 +72,14 @@ export function railwayGroup(p: RailwayPlan): THREE.Group {
   for (const rail of p.rails) g.add(railProfile(rail));
   for (const check of p.checkRails) g.add(lineBox({ ...check, height: 0.045 }, 0.238, darkMetal));
   for (const line of p.stopLines) g.add(flatStrip(line, 0.030, whitePaint));
+  for (const line of p.roadMarkings) g.add(flatStrip(line, 0.245, whitePaint));
   g.add(cableTrough(p.cableTrough));
   for (const fence of p.fences) g.add(boundaryFence(fence));
   for (const cabinet of p.cabinets) g.add(tracksideCabinet(cabinet));
-  for (const post of p.posts) g.add(tracksidePost(post, p.centerX, p.warningActive));
+  for (const post of p.posts) g.add(tracksidePost(post, p.warningActive));
   if (p.electrified) g.add(catenaryWires(p));
-  const fallbackDevices = p.devices.map((d) => crossingDevice(d, p.centerX));
-  g.add(...fallbackDevices);
+  const fallbackDevices = p.devices.map((d) => crossingDevice(d, p.center.x));
+  if (fallbackDevices.length > 0) g.add(...fallbackDevices);
   upgradeCrossingEquipment(g, p.devices, fallbackDevices);
 
   return g;
@@ -87,7 +98,7 @@ function ballastBed(s: RailStrip): THREE.Mesh {
   geom.translate(0, 0, -length / 2);
   const mesh = new THREE.Mesh(geom, ballastMat);
   mesh.position.set((s.a.x + s.b.x) / 2, 0.008, -(s.a.y + s.b.y) / 2);
-  mesh.rotation.y = Math.atan2(s.b.x - s.a.x, s.b.y - s.a.y);
+  mesh.rotation.y = segmentYawToThree(s.a, s.b);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -104,7 +115,8 @@ function addSleepersAndFasteners(g: THREE.Group, p: RailwayPlan) {
   const sleepers = new THREE.InstancedMesh(sleeperGeom, sleeperMat, p.sleepers.length);
   const matrix = new THREE.Matrix4();
   p.sleepers.forEach((s, i) => {
-    matrix.makeTranslation(s.center.x, 0.085, -s.center.y);
+    matrix.makeRotationY(s.yawRad);
+    matrix.setPosition(s.center.x, 0.085, -s.center.y);
     sleepers.setMatrixAt(i, matrix);
   });
   sleepers.castShadow = true;
@@ -115,12 +127,18 @@ function addSleepersAndFasteners(g: THREE.Group, p: RailwayPlan) {
   const clips = new THREE.InstancedMesh(new THREE.BoxGeometry(0.045, 0.045, 0.10), darkMetal, p.sleepers.length * 4);
   let pi = 0, ci = 0;
   for (const s of p.sleepers) {
-    for (const rail of p.rails) {
-      const rx = rail.a.x;
-      matrix.makeTranslation(rx, 0.147, -s.center.y);
+    for (const fastener of s.fastenerCenters) {
+      matrix.makeRotationY(s.yawRad);
+      matrix.setPosition(fastener.x, 0.147, -fastener.y);
       plates.setMatrixAt(pi++, matrix);
       for (const side of [-1, 1]) {
-        matrix.makeTranslation(rx + side * 0.085, 0.176, -s.center.y);
+        const alongSleeper = { x: Math.cos(s.yawRad), y: Math.sin(s.yawRad) };
+        matrix.makeRotationY(s.yawRad);
+        matrix.setPosition(
+          fastener.x + alongSleeper.x * side * 0.085,
+          0.176,
+          -(fastener.y + alongSleeper.y * side * 0.085),
+        );
         clips.setMatrixAt(ci++, matrix);
       }
     }
@@ -131,37 +149,26 @@ function addSleepersAndFasteners(g: THREE.Group, p: RailwayPlan) {
 }
 
 function addCrossingSurface(g: THREE.Group, p: RailwayPlan) {
-  g.add(groundMesh(p.crossingDeck, 0.235, asphalt));
-  const x0 = p.crossingDeck[0].x, x1 = p.crossingDeck[1].x;
-  const panelInset = 0.16;
-  g.add(groundMesh([
-    { x: x0 + panelInset, y: p.deckMinY }, { x: x1 - panelInset, y: p.deckMinY },
-    { x: x1 - panelInset, y: p.deckMaxY }, { x: x0 + panelInset, y: p.deckMaxY },
-  ], 0.238, rubber));
-  g.add(approachRamp(x0 - 1.8, x0, p.deckMinY, p.deckMaxY, 0.022, 0.235));
-  g.add(approachRamp(x1, x1 + 1.8, p.deckMinY, p.deckMaxY, 0.235, 0.022));
+  const deckMaterial = p.deckType === 'concrete' ? concrete : p.deckType === 'rubber' ? rubber : asphalt;
+  g.add(groundMesh(p.crossingDeck, 0.238, deckMaterial));
 
-  // Panel joints and black wheel-flange grooves are crucial visual cues.
-  for (let y = p.deckMinY + 0.65; y < p.deckMaxY; y += 0.72) {
-    g.add(flatStrip({ a: { x: x0 + 0.1, y }, b: { x: x1 - 0.1, y }, width: 0.025, height: 0.01 }, 0.241, seamMat));
-  }
+  // Black wheel-flange grooves follow each rail at any crossing angle.
   for (const rail of p.rails) {
+    const a = pointOnLineAtY(rail, p.roadOuterNearY);
+    const b = pointOnLineAtY(rail, p.roadOuterFarY);
+    const side = rail.trackIndex === undefined ? 1 : ((p.tracks[rail.trackIndex].rails[0] === rail) ? 1 : -1);
     g.add(flatStrip({
-      a: { x: rail.a.x + (rail.a.x < p.centerX ? 0.075 : -0.075), y: p.deckMinY },
-      b: { x: rail.a.x + (rail.a.x < p.centerX ? 0.075 : -0.075), y: p.deckMaxY },
-      width: 0.075, height: 0.01,
+      a: { x: a.x + p.railNormal.x * side * p.flangewayWidthM, y: a.y + p.railNormal.y * side * p.flangewayWidthM },
+      b: { x: b.x + p.railNormal.x * side * p.flangewayWidthM, y: b.y + p.railNormal.y * side * p.flangewayWidthM },
+      width: p.flangewayWidthM, height: 0.01,
     }, 0.243, seamMat));
   }
+}
 
-  // Restore road edge/centre markings over the crossing panels.
-  const roadMid = p.stopLines[0].a.y;
-  const near = p.stopLines[0].b.y;
-  const far = p.stopLines[1].a.y;
-  for (const y of [near, far]) {
-    g.add(flatStrip({ a: { x: x0, y }, b: { x: x1, y }, width: 0.10, height: 0.01 }, 0.245, whitePaint));
-  }
-  const dashHalf = Math.min(0.55, (x1 - x0) * 0.22);
-  g.add(flatStrip({ a: { x: p.centerX - dashHalf, y: roadMid }, b: { x: p.centerX + dashHalf, y: roadMid }, width: 0.09, height: 0.01 }, 0.245, whitePaint));
+function pointOnLineAtY(line: RailStrip, y: number): Vec2 {
+  const dy = line.b.y - line.a.y;
+  const t = Math.abs(dy) < 1e-9 ? 0 : (y - line.a.y) / dy;
+  return { x: line.a.x + (line.b.x - line.a.x) * t, y };
 }
 
 function railProfile(s: RailStrip): THREE.Group {
@@ -172,19 +179,6 @@ function railProfile(s: RailStrip): THREE.Group {
   return g;
 }
 
-function approachRamp(x0: number, x1: number, y0: number, y1: number, h0: number, h1: number): THREE.Mesh {
-  const vertices = new Float32Array([
-    x0, h0, -y0, x1, h1, -y0, x1, h1, -y1, x0, h0, -y1,
-  ]);
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-  geom.setIndex([0, 1, 2, 0, 2, 3]);
-  geom.computeVertexNormals();
-  const mesh = new THREE.Mesh(geom, asphalt);
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
 function cableTrough(s: RailStrip): THREE.Group {
   const g = new THREE.Group();
   const total = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
@@ -193,9 +187,11 @@ function cableTrough(s: RailStrip): THREE.Group {
   const slabs = new THREE.InstancedMesh(geom, concrete, count);
   const ux = (s.b.x - s.a.x) / total, uy = (s.b.y - s.a.y) / total;
   const matrix = new THREE.Matrix4();
+  const yaw = segmentYawToThree(s.a, s.b);
   for (let i = 0; i < count; i++) {
     const d = (i + 0.5) * total / count;
-    matrix.makeTranslation(s.a.x + ux * d, 0.025 + s.height / 2, -(s.a.y + uy * d));
+    matrix.makeRotationY(yaw);
+    matrix.setPosition(s.a.x + ux * d, 0.025 + s.height / 2, -(s.a.y + uy * d));
     slabs.setMatrixAt(i, matrix);
   }
   slabs.castShadow = true;
@@ -209,9 +205,9 @@ function boundaryFence(f: FenceSpan): THREE.Group {
   const dx = f.b.x - f.a.x, dy = f.b.y - f.a.y;
   const length = Math.hypot(dx, dy);
   const cx = (f.a.x + f.b.x) / 2, cz = -(f.a.y + f.b.y) / 2;
-  const angle = Math.atan2(dx, dy);
+  const angle = xAxisYawToThree(f.a, f.b);
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(length, f.height, Math.max(2, Math.ceil(length / 0.35)), 4), fenceMeshMat);
-  panel.rotation.y = angle + Math.PI / 2;
+  panel.rotation.y = angle;
   panel.position.set(cx, f.height / 2 + 0.08, cz);
   g.add(panel);
   const posts = Math.max(2, Math.ceil(length / 2) + 1);
@@ -258,14 +254,14 @@ function tracksideCabinet(c: TracksideCabinet): THREE.Group {
   return g;
 }
 
-function tracksidePost(p: TracksidePost, railX: number, warningActive: boolean): THREE.Group {
-  if (p.kind === 'catenary') return catenaryMast(p, railX);
-  if (p.kind === 'detector') return obstacleDetector(p, railX);
+function tracksidePost(p: TracksidePost, warningActive: boolean): THREE.Group {
+  if (p.kind === 'catenary') return catenaryMast(p);
+  if (p.kind === 'detector') return obstacleDetector(p);
   if (p.kind === 'special-signal') return specialSignal(p, warningActive);
-  return crossingLamp(p, railX);
+  return crossingLamp(p);
 }
 
-function catenaryMast(p: TracksidePost, railX: number): THREE.Group {
+function catenaryMast(p: TracksidePost): THREE.Group {
   const g = new THREE.Group();
   const x = p.center.x, z = -p.center.y;
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.18, p.height, 10), poleConcrete);
@@ -273,16 +269,20 @@ function catenaryMast(p: TracksidePost, railX: number): THREE.Group {
   pole.castShadow = true;
   g.add(pole);
   const armH = 6.45;
-  const armEnd = railX + p.side * 0.15;
-  g.add(segmentBox({ x, y: p.center.y }, { x: armEnd, y: p.center.y }, 0.07, 0.08, armH, darkMetal));
-  const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, Math.hypot(armEnd - x, 0.75), 8), darkMetal);
-  const dx = armEnd - x;
-  brace.position.set((x + armEnd) / 2, armH + 0.36, z);
-  brace.rotation.z = Math.atan2(dx, 0.75);
+  const target = p.target ?? p.center;
+  const dxToTarget = target.x - x, dyToTarget = target.y - p.center.y;
+  const targetLen = Math.hypot(dxToTarget, dyToTarget) || 1;
+  const armEnd = { x: target.x + dxToTarget / targetLen * p.side * 0.15, y: target.y + dyToTarget / targetLen * p.side * 0.15 };
+  g.add(segmentBox(p.center, armEnd, 0.07, 0.08, armH, darkMetal));
+  const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, Math.hypot(targetLen, 0.75), 8), darkMetal);
+  brace.position.set((x + armEnd.x) / 2, armH + 0.36, -(p.center.y + armEnd.y) / 2);
+  brace.rotation.z = Math.atan2(targetLen, 0.75);
   g.add(brace);
-  for (const ix of [railX - 0.56, railX + 0.56]) {
+  for (const offset of [-0.56, 0.56]) {
+    const ix = target.x + (dxToTarget / targetLen) * offset;
+    const iy = target.y + (dyToTarget / targetLen) * offset;
     const ins = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.32, 8), new THREE.MeshStandardMaterial({ color: 0x73654d, roughness: 0.6 }));
-    ins.position.set(ix, armH - 0.14, z);
+    ins.position.set(ix, armH - 0.14, -iy);
     g.add(ins);
   }
   return g;
@@ -290,19 +290,15 @@ function catenaryMast(p: TracksidePost, railX: number): THREE.Group {
 
 function catenaryWires(p: RailwayPlan): THREE.Group {
   const g = new THREE.Group();
-  const y0 = p.ballast.a.y, y1 = p.ballast.b.y;
   const messenger = new THREE.MeshStandardMaterial({ color: 0x353637, roughness: 0.45, metalness: 0.75 });
-  g.add(segmentBox({ x: p.centerX, y: y0 }, { x: p.centerX, y: y1 }, 0.018, 0.018, 6.05, messenger));
-  g.add(segmentBox({ x: p.centerX, y: y0 }, { x: p.centerX, y: y1 }, 0.014, 0.014, 5.35, messenger));
-  for (let y = Math.ceil(y0 / 4.5) * 4.5; y <= y1; y += 4.5) {
-    const drop = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.70, 6), messenger);
-    drop.position.set(p.centerX, 5.70, -y);
-    g.add(drop);
+  for (const track of p.tracks) {
+    g.add(segmentBox(track.centerLine.a, track.centerLine.b, 0.018, 0.018, 6.05, messenger));
+    g.add(segmentBox(track.centerLine.a, track.centerLine.b, 0.014, 0.014, 5.35, messenger));
   }
   return g;
 }
 
-function obstacleDetector(p: TracksidePost, railX: number): THREE.Group {
+function obstacleDetector(p: TracksidePost): THREE.Group {
   const g = new THREE.Group();
   const x = p.center.x, z = -p.center.y;
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, p.height, 8), cabinetMat);
@@ -310,12 +306,14 @@ function obstacleDetector(p: TracksidePost, railX: number): THREE.Group {
   g.add(pole);
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 0.18), cabinetMat);
   head.position.set(x, p.height, z);
-  head.rotation.y = x < railX ? -0.25 : 0.25;
+  const target = p.target ?? p.center;
+  head.rotation.y = segmentYawToThree(p.center, target);
   head.castShadow = true;
   g.add(head);
   const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12), black);
   lens.rotation.z = Math.PI / 2;
-  lens.position.set(x + (x < railX ? 0.13 : -0.13), p.height, z);
+  const d = Math.hypot(target.x - x, target.y - p.center.y) || 1;
+  lens.position.set(x + (target.x - x) / d * 0.13, p.height, -(p.center.y + (target.y - p.center.y) / d * 0.13));
   g.add(lens);
   return g;
 }
@@ -343,16 +341,16 @@ function specialSignal(p: TracksidePost, warningActive: boolean): THREE.Group {
   return g;
 }
 
-function crossingLamp(p: TracksidePost, railX: number): THREE.Group {
+function crossingLamp(p: TracksidePost): THREE.Group {
   const g = new THREE.Group();
   const x = p.center.x, z = -p.center.y;
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, p.height, 8), cabinetMat);
   pole.position.set(x, p.height / 2, z);
   g.add(pole);
-  const endX = railX;
-  g.add(segmentBox({ x, y: p.center.y }, { x: endX, y: p.center.y }, 0.06, 0.06, p.height - 0.18, cabinetMat));
+  const target = p.target ?? p.center;
+  g.add(segmentBox(p.center, target, 0.06, 0.06, p.height - 0.18, cabinetMat));
   const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.28), darkMetal);
-  lamp.position.set(endX, p.height - 0.25, z);
+  lamp.position.set(target.x, p.height - 0.25, -target.y);
   lamp.rotation.z = -0.25;
   g.add(lamp);
   return g;
@@ -365,9 +363,9 @@ function crossingDevice(d: CrossingDevice, railX: number): THREE.Group {
   const faceDirX = facesWest ? -1 : 1;
   const dirZ = -d.armDirY;
 
-  g.add(warningAssembly(d, faceDirX));
-  g.add(gateMachineAssembly(d, faceDirX));
-  g.add(warningFence(x - faceDirX * 0.50, z + dirZ * 0.78, faceDirX));
+  if (d.hasWarning) g.add(warningAssembly(d, faceDirX));
+  if (d.hasGate) g.add(gateMachineAssembly(d, faceDirX));
+  if (d.hasWarning || d.hasGate) g.add(warningFence(x - faceDirX * 0.50, z + dirZ * 0.78, faceDirX));
   return g;
 }
 
@@ -389,7 +387,9 @@ function warningAssembly(d: CrossingDevice, faceDirX: number): THREE.Group {
   }
 
   g.add(warningHorn(x, d.mastHeight - 0.04, z, faceDirX));
-  g.add(directionIndicator(x + faceDirX * 0.11, d.mastHeight - 2.05, z, faceDirX, d.warningActive));
+  if (d.hasDirectionIndicator) {
+    g.add(directionIndicator(x + faceDirX * 0.11, d.mastHeight - 2.05, z, faceDirX, d.warningActive));
+  }
   g.add(crossbuck(x, d.mastHeight - 0.42, z));
   g.add(emergencyButton(x, z - dirZ * 0.55, faceDirX));
 
@@ -876,7 +876,7 @@ function segmentBox(a: Vec2, b: Vec2, width: number, height: number, centerH: nu
   const length = Math.hypot(dx, dy);
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, length), mat);
   mesh.position.set((a.x + b.x) / 2, centerH, -(a.y + b.y) / 2);
-  mesh.rotation.y = Math.atan2(dx, dy);
+  mesh.rotation.y = segmentYawToThree(a, b);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;

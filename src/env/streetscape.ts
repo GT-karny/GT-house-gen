@@ -65,6 +65,7 @@ export interface Streetscape {
 export interface StreetscapeConfig {
   seed: number;
   roadWidth: number; // carriageway width (m) — JP 生活道路 ≈ 4–6 m
+  laneCount: number; // through lanes crossing the railway (1..4 in the prototype)
   walkWidth: number; // near-side gutter/歩道 strip against the lots (m)
   farWidth: number; // strip on the far side of the road (implies houses opposite, off-scene)
   runoff: number; // how far the street runs PAST the row ends (m), so it reads as a through road
@@ -75,6 +76,7 @@ export interface StreetscapeConfig {
 export const DEFAULT_STREET: StreetscapeConfig = {
   seed: 0,
   roadWidth: 5.0,
+  laneCount: 2,
   walkWidth: 1.6,
   farWidth: 1.2,
   runoff: 30,
@@ -130,8 +132,11 @@ export function planStreetscape(b: StreetBounds, cfg: StreetscapeConfig = DEFAUL
     { a: { x: x0, y: yRoadFar + inset }, b: { x: x1, y: yRoadFar + inset }, width: 0.12, color: 'white' },
   ];
   if (cfg.centerLine) {
-    const yc = (yWalkOut + yRoadFar) / 2;
-    markings.push({ a: { x: x0, y: yc }, b: { x: x1, y: yc }, width: 0.1, color: 'white', dash: { on: 3, off: 4 } });
+    const lanes = Math.min(4, Math.max(1, Math.round(cfg.laneCount)));
+    for (let i = 1; i < lanes; i++) {
+      const y = yWalkOut - cfg.roadWidth * i / lanes;
+      markings.push({ a: { x: x0, y }, b: { x: x1, y }, width: 0.1, color: 'white', dash: { on: 3, off: 4 } });
+    }
   }
 
   // 側溝: a channel along the road edge on the near (property) side.
