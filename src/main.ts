@@ -10,6 +10,8 @@ import { generateHouse, type GenerateOptions } from './gen/building';
 import { makeSampleLot, type LotShape } from './gen/lot';
 import { planStreetscape, DEFAULT_STREET, type StreetscapeConfig } from './env/streetscape';
 import { streetscapeGroup, disposeStreetscape } from './viewer/env';
+import { planRailway, DEFAULT_RAILWAY, type RailwayConfig } from './env/railway';
+import { railwayGroup, disposeRailway } from './viewer/railway';
 
 type StyleName = 'generic' | 'jp-tract' | 'jp-cube';
 
@@ -35,12 +37,14 @@ const view = {
   rowGap: 0.0,       // 隣家との隙間 (m) — 0 で敷地が連続
   rowVaryLot: true,  // 各敷地の間口/奥行をシードで少し振る
   showStreet: true,  // 前面道路・歩道・電柱 (家とは分離した公共空間)
+  showRailway: true, // 日本の在来線 + 第1種踏切
   lotShape: 'rectangle' as LotShape, // 敷地形状 (矩形/台形/丸角/隅切り)
 };
 
 // Streetscape (public realm) config — SEPARATE from GenConfig so it never mixes
 // into the house data model / core. Lives in src/env.
 const street: StreetscapeConfig = { ...DEFAULT_STREET };
+const railway: RailwayConfig = { ...DEFAULT_RAILWAY };
 
 // randomisation palettes (picked per seed when the control is on 'auto')
 const ROOF_COLORS = [0x3b3d42, 0x4a4d53, 0x2f3136, 0x5a4b3a, 0x6b6560, 0x7a3f36]; // 黒/濃灰/灰/茶/瓦/レンガ
@@ -100,6 +104,8 @@ function resolveFenceStyle(seed: number): FenceStyle {
 
 let current: THREE.Group | null = null;
 let currentStreet: THREE.Group | null = null;
+let currentRailway: THREE.Group | null = null;
+let currentRailPlan: ReturnType<typeof planRailway> | null = null;
 
 interface BuiltHouse {
   group: THREE.Group;
@@ -218,25 +224,89 @@ function rebuildStreet(totalW: number, built: BuiltHouse[]) {
     disposeStreetscape(currentStreet);
     currentStreet = null;
   }
+  if (currentRailway) {
+    viewer.env.remove(currentRailway);
+    disposeRailway(currentRailway);
+    currentRailway = null;
+    currentRailPlan = null;
+  }
   if (!view.showStreet || built.length === 0) return;
 
   const maxDepth = Math.max(...built.map((h) => h.depth));
+  const bounds = { xMin: -totalW / 2, xMax: totalW / 2, frontY: -maxDepth / 2 };
   const plan = planStreetscape(
-    { xMin: -totalW / 2, xMax: totalW / 2, frontY: -maxDepth / 2 },
+    bounds,
     { ...street, seed: cfg.seed },
   );
+  let railPlan: ReturnType<typeof planRailway> | null = null;
+  if (view.showRailway) {
+    const roadNearY = bounds.frontY - street.walkWidth;
+    const roadFarY = roadNearY - street.roadWidth;
+    const plannedRail = planRailway({
+      ...bounds,
+      rearY: maxDepth / 2,
+      roadNearY,
+      roadFarY,
+      farEdgeY: roadFarY - street.farWidth,
+    }, { ...railway, seed: cfg.seed });
+    railPlan = plannedRail;
+    // Do not place a utility pole inside the railway/crossing equipment envelope.
+    plan.props = plan.props.filter((p) => Math.abs(p.center.x - plannedRail.centerX) > railway.ballastWidth / 2 + 1.2);
+  }
   const g = streetscapeGroup(plan);
   viewer.env.add(g);
   currentStreet = g;
+  if (railPlan) {
+    const rg = railwayGroup(railPlan);
+    viewer.env.add(rg);
+    currentRailway = rg;
+    currentRailPlan = railPlan;
+  }
+}
+
+/** Tight inspection view centred on the crossing safety equipment. */
+function frameCrossing() {
+  if (!currentRailPlan) return;
+  const [near, far] = currentRailPlan.devices;
+  const targetX = (near.center.x + far.center.x) / 2;
+  const targetY = (near.center.y + far.center.y) / 2;
+  const mastHeight = Math.max(near.mastHeight, far.mastHeight);
+  viewer.controls.target.set(targetX, mastHeight * 0.50, -targetY);
+  viewer.camera.position.set(targetX + 8.3, mastHeight + 2.5, -targetY + 9.4);
+  viewer.camera.updateProjectionMatrix();
+  viewer.controls.update();
+}
+
+/** Close inspection of one independent electric gate machine and its drive. */
+function frameGateMachine() {
+  if (!currentRailPlan) return;
+  const device = currentRailPlan.devices[0];
+  const side = device.gateCenter.x < currentRailPlan.centerX ? -1 : 1;
+  const x = device.gateCenter.x;
+  const z = -device.gateCenter.y;
+  viewer.controls.target.set(x, 0.82, z);
+  viewer.camera.position.set(x + side * 3.0, 2.55, z + 3.6);
+  viewer.camera.updateProjectionMatrix();
+  viewer.controls.update();
 }
 
 /** Pull the camera back to fit a street of the given width (along X), viewed
  *  from the road side (−Y in gen space → +Z in three). */
 function frameStreet(spanX: number, depth: number) {
-  const half = Math.max(spanX, depth) / 2;
+  let xMin = -spanX / 2;
+  let xMax = spanX / 2;
+  if (view.showStreet && view.showRailway) {
+    const crossingX = railway.crossingSide === 'right'
+      ? xMax + railway.crossingOffset
+      : xMin - railway.crossingOffset;
+    xMin = Math.min(xMin, crossingX - railway.ballastWidth / 2 - 2);
+    xMax = Math.max(xMax, crossingX + railway.ballastWidth / 2 + 2);
+  }
+  const targetX = (xMin + xMax) / 2;
+  const half = Math.max(xMax - xMin, depth) / 2;
   const dist = half / Math.tan((viewer.camera.fov * Math.PI) / 360) * 1.35 + 8;
-  viewer.controls.target.set(0, 3, 0);
-  viewer.camera.position.set(dist * 0.35, dist * 0.6, dist * 0.95);
+  viewer.controls.target.set(targetX, 3, 0);
+  viewer.camera.position.set(targetX + dist * 0.35, dist * 0.6, dist * 0.95);
   viewer.camera.updateProjectionMatrix();
 }
 
@@ -287,6 +357,19 @@ fStreet.add(street, 'roadWidth', 3, 9, 0.5).name('車道幅 m').onChange(regener
 fStreet.add(street, 'walkWidth', 0, 4, 0.2).name('歩道/路肩幅 m').onChange(regenerate);
 fStreet.add(street, 'centerLine').name('センターライン').onChange(regenerate);
 fStreet.add(street, 'poleSpacing', 0, 30, 1).name('電柱間隔 m (0=なし)').onChange(regenerate);
+
+const fRail = gui.addFolder('Railway (日本の踏切)');
+fRail.add(view, 'showRailway').name('線路/踏切 表示').onChange(reframe);
+fRail.add(railway, 'crossingSide', ['left', 'right']).name('住宅列の左右').onChange(reframe);
+fRail.add(railway, 'crossingOffset', 4, 20, 0.5).name('住宅列からの距離 m').onChange(reframe);
+fRail.add(railway, 'gauge', { '狭軌 1,067 mm': 1.067, '標準軌 1,435 mm': 1.435 }).name('軌間').onChange(regenerate);
+fRail.add(railway, 'barrierClosed').name('遮断かんを閉じる').onChange(regenerate);
+fRail.add(railway, 'warningActive').name('警報灯・方向表示を作動').onChange(regenerate);
+fRail.add(railway, 'electrified').name('電化柱・架線').onChange(regenerate);
+fRail.add(railway, 'sleeperType', { 'PCまくらぎ': 'pc', '木まくらぎ': 'wood' }).name('まくらぎ').onChange(regenerate);
+fRail.add(railway, 'safetyEquipment', { '高設備踏切': 'full', '基本設備のみ': 'basic' }).name('保安装置').onChange(regenerate);
+fRail.add({ focus: frameCrossing }, 'focus').name('🎥 踏切設備に接近');
+fRail.add({ focus: frameGateMachine }, 'focus').name('🎥 遮断機を接写');
 
 const fLot = gui.addFolder('Lot (敷地)');
 fLot.add(view, 'lotShape', ['rectangle', 'irregular-quad', 'rounded-corner', 'chamfered'])
