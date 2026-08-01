@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/dela-gothic-one':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/m-plus-rounded-1c':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/zen-kaku-gothic-new':
+        specifier: 5.3.0
+        version: 5.3.0
       lil-gui:
         specifier: ^0.19.2
         version: 0.19.2
@@ -323,6 +332,15 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource/dela-gothic-one@5.3.0':
+    resolution: {integrity: sha512-4A26Qs7TqYFWegJfYHx7KKWy01YybW/e7uhFDM8A8e1neVPm721laLnh0en60wtKihfNdCbJt0VVcEMHC4pHjw==}
+
+  '@fontsource/m-plus-rounded-1c@5.3.0':
+    resolution: {integrity: sha512-eB/JxJBRXLdfTsBDElsAZDMtHXM58Hf1tKkHoDVZAaUN7a+qYfwNKh4Q2f7Fk9YNg4xPFjTwooVlQyqbhi8CWQ==}
+
+  '@fontsource/zen-kaku-gothic-new@5.3.0':
+    resolution: {integrity: sha512-2t88gAaUkqIAFARfO8GkT1x57QBRx8A0pWeB0CIrIahnzdanWjcV4thPCSv9BJmpeRndq6qbFx1KYglHykiPhw==}
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -918,6 +936,12 @@ snapshots:
 
   '@esbuild/win32-x64@0.25.12':
     optional: true
+
+  '@fontsource/dela-gothic-one@5.3.0': {}
+
+  '@fontsource/m-plus-rounded-1c@5.3.0': {}
+
+  '@fontsource/zen-kaku-gothic-new@5.3.0': {}
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 

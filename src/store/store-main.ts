@@ -1,11 +1,12 @@
 import GUI from 'lil-gui';
+import './store-fonts.css';
 import { createViewer } from '../viewer/scene';
 import { renderStore, disposeGroup, type StoreRenderParams } from './viewer/render';
 import { DEFAULT_STORE_CONFIG, STORE_PRESETS, type StoreConfig, type StorePresetName, type StoreRoofForm } from './gen/config';
 import { generateStore } from './gen/building';
 import { makeSampleStoreLot, type LotShape } from './gen/lot';
 import { rand01 } from '../shared/rng';
-import { LOGO_VARIANT_COUNT, type StoreWallVariant } from './viewer/materials';
+import { LOGO_VARIANT_COUNT, storeBrandColor, type StoreWallVariant } from './viewer/materials';
 import * as THREE from 'three';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
@@ -97,7 +98,7 @@ function regenerate() {
   const { plan, roofs, site } = generateStore(lot, cfg, { roofForm });
   const wall = resolveStoreWall(view.preset, cfg.seed, plan.floors, view.wallStyle);
   const rp: StoreRenderParams = {
-    brandColor: cfg.brandColor, showSite: view.showSite, wallMain: wall.main, wallBase: wall.base,
+    brandColor: storeBrandColor(plan.logoId), showSite: view.showSite, wallMain: wall.main, wallBase: wall.base,
     windowAwnings: cfg.windowAwnings, entranceGable: cfg.entranceGable,
   };
   const group = renderStore(plan, roofs, site, rp);
@@ -177,8 +178,18 @@ fSign.add(cfg, 'driveThrough').name('ドライブスルー').onChange(regenerate
 fSign.add(cfg, 'serviceYard').name('荷捌きヤード').onChange(regenerate);
 fSign.add(cfg, 'carts').name('カート置き場').onChange(regenerate);
 fSign.add(cfg, 'flags').name('幟/旗').onChange(regenerate);
-fSign.addColor(cfg, 'brandColor').name('ブランド色').onChange(regenerate);
 
-// boot
-frameCamera();
-applyPreset('big-box');
+// Canvas does not automatically repaint text when a webfont finishes loading.
+// Preload the exact Japanese glyph sets used by the fictional brands before the
+// first sign texture is baked, avoiding a one-frame system-font fallback.
+async function boot() {
+  await Promise.all([
+    document.fonts.load('900 32px "Zen Kaku Gothic New"', '光星デンキくらし館'),
+    document.fonts.load('800 32px "M PLUS Rounded 1c"', 'みのりまちポートこもれびキッチンひだまり木陽'),
+    document.fonts.load('400 32px "Dela Gothic One"', 'デイリーワングリルバンズGRILL BUNS'),
+    document.fonts.load('400 32px "Dela Gothic Latin"', 'GRILL BUNS'),
+  ]);
+  frameCamera();
+  applyPreset('big-box');
+}
+void boot();

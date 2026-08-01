@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve('index.html'),
         store: resolve('store.html'),
+        signage: resolve('signage.html'),
         apartment: resolve('apartment.html'),
       },
     },

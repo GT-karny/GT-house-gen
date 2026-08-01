@@ -392,6 +392,17 @@ describe('signage', () => {
     expect(generateStore(lotOf(cfg), cfg).plan.logoId).toBe(2);
   });
 
+  it('auto brand ids stay inside the business-category pool', () => {
+    const pools: Record<StorePresetName, number[]> = {
+      'big-box': [0, 1, 2], convenience: [3, 4],
+      'family-restaurant': [5, 6], 'drive-through': [7],
+    };
+    for (const preset of PRESETS) for (let seed = 0; seed < 12; seed++) {
+      const cfg = cfgOf(preset, { seed, logoStyle: -1 });
+      expect(pools[preset]).toContain(generateStore(lotOf(cfg), cfg).plan.logoId);
+    }
+  });
+
   it('family-restaurant carries both a wall sign and a blade sign', () => {
     for (let seed = 0; seed < 10; seed++) {
       const cfg = cfgOf('family-restaurant', { seed });

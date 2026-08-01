@@ -21,6 +21,7 @@ export type StoreRoofForm = 'flat' | 'gable' | 'hip' | 'mono' | 'mansard';
  *  faces the road regardless of placement. */
 export type BuildingDepth = 'front' | 'rear' | 'auto';
 export type BuildingSide = 'left' | 'center' | 'right' | 'auto';
+export type StoreBrandCategory = 'big-box' | 'convenience' | 'family-restaurant' | 'drive-through';
 
 export interface StoreConfig {
   seed: number;
@@ -73,6 +74,7 @@ export interface StoreConfig {
   pylonHeight: number; // pole height to the underside of the sign box (m)
   rooftopSign: boolean; // 陸屋根に屋上看板(キューブ/板型)を載せる候補にする (seed-random, flat roofs only)
   logoStyle: number; // brand-logo variant: -1 = auto (seed-derived), ≥0 = explicit id
+  brandCategory: StoreBrandCategory; // auto-logo pool follows the business preset
 
   // --- parking-lot lighting ---
   lightPoleHeight: number; // pole-light mounting height (m); JP平面駐車場 ≈4.5–6
@@ -131,6 +133,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   pylonHeight: 6.0,
   rooftopSign: true,
   logoStyle: -1, // auto (seed-derived)
+  brandCategory: 'big-box',
 
   lightPoleHeight: 5.0,
 
@@ -148,6 +151,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
  * を駐車で巻く、壁面看板帯、背面荷捌き、カート置き場。
  */
 export const BIG_BOX_PRESET: Partial<StoreConfig> = {
+  brandCategory: 'big-box',
   panelW: 3.0,
   panelH: 5.0,
   lotWidth: 90,
@@ -179,6 +183,7 @@ export const BIG_BOX_PRESET: Partial<StoreConfig> = {
  * サインポール。荷捌きヤードは無し。
  */
 export const CONVENIENCE_PRESET: Partial<StoreConfig> = {
+  brandCategory: 'convenience',
   panelW: 2.4,
   panelH: 4.0,
   // deep enough that the frontage fits an entry drive aisle + a nose-in row (so
@@ -201,6 +206,7 @@ export const CONVENIENCE_PRESET: Partial<StoreConfig> = {
   signbandH: 1.0,
   signPylon: true,
   pylonHeight: 5.5,
+  rooftopSign: false,
   lightPoleHeight: 4.5,
   serviceYard: false,
   carts: false,
@@ -211,6 +217,7 @@ export const CONVENIENCE_PRESET: Partial<StoreConfig> = {
  * ファミレス: 中規模敷地、勾配屋根の中規模棟 + 車寄せ、独立サイン、店頭植栽。
  */
 export const FAMILY_RESTAURANT_PRESET: Partial<StoreConfig> = {
+  brandCategory: 'family-restaurant',
   panelW: 2.5,
   panelH: 3.8,
   lotWidth: 38,
@@ -248,6 +255,7 @@ export const FAMILY_RESTAURANT_PRESET: Partial<StoreConfig> = {
  * 大庇。前面駐車。
  */
 export const DRIVE_THROUGH_PRESET: Partial<StoreConfig> = {
+  brandCategory: 'drive-through',
   panelW: 2.5,
   panelH: 4.0,
   lotWidth: 34,
@@ -268,6 +276,7 @@ export const DRIVE_THROUGH_PRESET: Partial<StoreConfig> = {
   signbandH: 1.2,
   signPylon: true,
   pylonHeight: 6.5,
+  rooftopSign: false,
   lightPoleHeight: 5.0,
   driveThrough: true,
   serviceYard: false,

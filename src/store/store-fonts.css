@@ -1,0 +1,35 @@
+/* Store-only self-hosted display faces. Keep a single modern WOFF2 source per
+   family; all three packages include the complete Japanese glyph set. */
+@font-face {
+  font-family: 'Zen Kaku Gothic New';
+  font-style: normal;
+  font-display: block;
+  font-weight: 900;
+  src: url('../../node_modules/@fontsource/zen-kaku-gothic-new/files/zen-kaku-gothic-new-japanese-900-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'M PLUS Rounded 1c';
+  font-style: normal;
+  font-display: block;
+  font-weight: 800;
+  src: url('../../node_modules/@fontsource/m-plus-rounded-1c/files/m-plus-rounded-1c-japanese-800-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Dela Gothic One';
+  font-style: normal;
+  font-display: block;
+  font-weight: 400;
+  src: url('../../node_modules/@fontsource/dela-gothic-one/files/dela-gothic-one-japanese-400-normal.woff2') format('woff2');
+}
+
+/* The Japanese subset does not contain the Latin wordmark glyphs. Keep the
+   Latin face separate so Canvas does not silently fall back to a thin system font. */
+@font-face {
+  font-family: 'Dela Gothic Latin';
+  font-style: normal;
+  font-display: block;
+  font-weight: 400;
+  src: url('../../node_modules/@fontsource/dela-gothic-one/files/dela-gothic-one-latin-400-normal.woff2') format('woff2');
+}

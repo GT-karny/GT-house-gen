@@ -21,3 +21,15 @@ Walls:  brick=Bricks090  brick2=Bricks066  plaster2=Plaster003
 Doors:  door_a=Wood062  door_b=Wood067  door_c=Wood048  door_paint=PaintedWood001
 Fences: fence2=Fence006  fence3=Fence004
 Store:  ribbed=CorrugatedSteel005 (角波金属パネル: 店舗外壁/シャッター/折板屋根)
+
+--- Store signage promotional imagery ---
+store-signage/drive-menu.png: generated for this prototype with OpenAI image
+generation. Fictional, unbranded food imagery; Japanese shop names and prices
+are rendered separately by the Three.js viewer for deterministic legibility.
+
+--- Store signage fictional brand marks ---
+store-signage/logos/*.png: generated for this prototype with OpenAI image
+generation, then converted to transparent silhouette masks. They are original,
+fictional marks informed by general Japanese chain-store identity conventions;
+no real-chain artwork is embedded. Final one-colour treatment and Japanese shop
+names are rendered separately by the Three.js viewer.

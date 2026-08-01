@@ -20,7 +20,15 @@ function faceYaw(dir: Vec2): number {
  *  A stable integer; the renderer maps it onto its logo set (e.g. the Three canvas
  *  drawer) via `id % variantCount`. Pure logic, renderer-agnostic. */
 export function resolveLogoId(cfg: StoreConfig): number {
-  return cfg.logoStyle >= 0 ? Math.floor(cfg.logoStyle) : (hashInts(cfg.seed, 0x1060) >>> 0);
+  if (cfg.logoStyle >= 0) return Math.floor(cfg.logoStyle);
+  const pools: Record<StoreConfig['brandCategory'], readonly number[]> = {
+    'big-box': [0, 1, 2],
+    convenience: [3, 4],
+    'family-restaurant': [5, 6],
+    'drive-through': [7],
+  };
+  const pool = pools[cfg.brandCategory];
+  return pool[(hashInts(cfg.seed, 0x1060) >>> 0) % pool.length];
 }
 
 export function placePylon(cfg: StoreConfig, pos: Vec2, baseZ: number, axisU: Vec2): SignInstance {
@@ -86,10 +94,10 @@ export function placeRooftopSign(cfg: StoreConfig, mass: OBB, roofZ: number, fac
   if (rand01(cfg.seed, 0x2f00) >= 0.6) return null; // ~60% of eligible flat roofs get one
   const yawDeg = faceYaw(faceNormal);
   const wSpan = mass.halfU * 2, dSpan = mass.halfV * 2;
-  if (rand01(cfg.seed, 0x2f01) < 0.5) {
+  if (rand01(cfg.seed, 0x2f01) < 0.12) {
     // cube — perched on one of the two FRONT (road-side) corners of the roof,
     // rising above the parapet (like a phone-shop cube). Left/right by seed.
-    const side = Math.max(2.8, Math.min(Math.min(wSpan, dSpan) * 0.4, 6.5));
+    const side = Math.max(2.4, Math.min(Math.min(wSpan, dSpan) * 0.22, 3.6));
     const n = faceNormal, t = { x: -faceNormal.y, y: faceNormal.x }; // n = toward road
     const eN = Math.abs(mass.halfU * (mass.axisU.x * n.x + mass.axisU.y * n.y)) + Math.abs(mass.halfV * (mass.axisV.x * n.x + mass.axisV.y * n.y));
     const eT = Math.abs(mass.halfU * (mass.axisU.x * t.x + mass.axisU.y * t.y)) + Math.abs(mass.halfV * (mass.axisV.x * t.x + mass.axisV.y * t.y));

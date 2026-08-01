@@ -9,8 +9,9 @@ import * as THREE from 'three';
 import type { StoreSitePlan, SiteRect, StoreProp, FenceSpan, SignInstance, ParkingStall, Vec2, StoreZoneKind } from '../gen/types';
 import {
   zoneMaterial, stripeMaterial, accessibleMaterial, carPaintMaterial, carGlassMaterial, tireMaterial,
-  poleMaterial, signBoxMaterial, signFaceMaterial, metalMaterial, lampMaterial, foliageMaterial, trunkMaterial, propMaterial, curbMaterial,
+  poleMaterial, pylonPoleMaterial, signBoxMaterial, signFaceMaterial, metalMaterial, lampMaterial, foliageMaterial, trunkMaterial, propMaterial, curbMaterial,
 } from './materials';
+import { signBoard } from './sign-board';
 
 const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y);
 
@@ -109,18 +110,37 @@ function signMesh(s: SignInstance): THREE.Object3D {
   const g = new THREE.Group();
   const yaw = (s.yawDeg * Math.PI) / 180;
   const face = { x: Math.cos(yaw), y: Math.sin(yaw) };
+  const tangent = { x: -face.y, y: face.x };
   if (s.kind === 'pylon') {
-    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.4, s.poleH, 0.4), poleMaterial());
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.4, s.poleH, 0.4), pylonPoleMaterial());
     pole.position.y = s.poleH / 2; pole.castShadow = true; g.add(pole);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.35, s.h, s.w), signFaceMaterial(s.color, s.logoId));
-    box.position.y = s.poleH + s.h / 2; box.castShadow = true; g.add(box);
+    const board = signBoard(s.w, s.h, 0.3, signFaceMaterial(s.color, s.logoId, 'pylon', s.w / s.h), { frame: 0.035 });
+    board.position.y = s.poleH + s.h / 2; g.add(board);
+    // Older Japanese home centres and roadside shops often light tall pylons
+    // externally from a small rail above the cabinet. This also makes the sign
+    // read as installed equipment rather than a texture on a box.
+    const top = s.poleH + s.h;
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(s.w * 0.88, 0.055, 0.055), metalMaterial());
+    rail.position.set(0, top + 0.28, 0); g.add(rail);
+    const lights = s.w >= 2.8 ? [-0.32, 0, 0.32] : [-0.28, 0.28];
+    for (const u of lights) {
+      const x = u * s.w;
+      const upright = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.3, 0.045), metalMaterial());
+      upright.position.set(x, top + 0.15, 0); g.add(upright);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.34), metalMaterial());
+      arm.position.set(x, top + 0.3, 0.14); g.add(arm);
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.09, 0.14), metalMaterial());
+      housing.position.set(x, top + 0.25, 0.32); housing.rotation.x = -0.35; g.add(housing);
+      const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.065), lampMaterial());
+      lens.position.set(x, top + 0.22, 0.39); lens.rotation.x = -0.35; g.add(lens);
+    }
   } else {
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, s.poleH + s.h, 0.15), poleMaterial());
     post.position.y = (s.poleH + s.h) / 2; g.add(post);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.1, s.h, s.w), signFaceMaterial(s.color, s.logoId));
-    panel.position.y = s.poleH + s.h / 2; panel.castShadow = true; g.add(panel);
+    const panel = signBoard(s.w, s.h, 0.12, signFaceMaterial(s.color, s.logoId, 'menu', s.w / s.h), { frame: 0.045 });
+    panel.position.y = s.poleH + s.h / 2; g.add(panel);
   }
-  orient(g, s.pos.x, s.pos.y, s.z, face);
+  orient(g, s.pos.x, s.pos.y, s.z, tangent);
   return g;
 }
 

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Store Signage Brand Proof</title>
+    <style>
+      :root { color: #e8e8e5; background: #202326; font-family: system-ui, sans-serif; }
+      body { margin: 0; padding: 32px; }
+      header { max-width: 1100px; margin: 0 auto 30px; }
+      h1 { margin: 0 0 8px; font-size: 26px; }
+      p { color: #aeb4b7; margin: 0; }
+      main { max-width: 1100px; margin: auto; display: grid; gap: 28px; }
+      section { padding: 22px; background: #2a2e31; border: 1px solid #3d4347; border-radius: 10px; }
+      h2 { margin: 0 0 4px; font-size: 20px; }
+      .meta { margin-bottom: 18px; color: #9da5a8; font-size: 13px; letter-spacing: .04em; }
+      .proofs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+      figure { margin: 0; min-width: 0; }
+      figcaption { margin: 0 0 6px; color: #bbc1c3; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+      canvas { display: block; width: 100%; height: auto; background: #fff; box-shadow: 0 8px 22px #0005; }
+      figure[data-role="pylon"], figure[data-role="blade"] { max-width: 240px; }
+      @media (max-width: 720px) { body { padding: 16px; } .proofs { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>日本ロードサイド店舗・サイン校正</h1>
+      <p>ブランド間の差と、用途別ロックアップの視認性を同じ条件で比較するための開発用ページ。</p>
+    </header>
+    <main id="proofs"></main>
+    <script type="module" src="/src/store/signage-preview.ts"></script>
+  </body>
+</html>

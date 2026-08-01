@@ -12,10 +12,11 @@ import type { StoreRoofMass } from '../gen/roof';
 import { planarBoxUV, WALL_TILE } from '../../viewer/modules';
 import {
   moduleMaterial, storeWallMaterial, mullionMaterial, roofMaterial, flatRoofDeckMaterial, parapetMaterial, poleMaterial, metalMaterial,
-  mansardMaterial, awningMaterial, signFaceMaterial, fasciaMaterial, fasciaBaseMaterial,
+  mansardMaterial, awningMaterial, signFaceMaterial, fasciaMaterial,
   type StoreWallVariant,
 } from './materials';
 import { storeSiteMeshes } from './site';
+import { signBoard } from './sign-board';
 
 const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y);
 const dir3 = (x: number, y: number) => new THREE.Vector3(x, 0, -y).normalize();
@@ -127,13 +128,12 @@ export function renderStore(
         entrancePorch(panel, p.brandColor).forEach((m) => g.add(m));
     } else g.add(boardPanel(panel, panel.floor === 0 ? wallBase : wallMain)); // wall / shutter
   }
-  // continuous signage fascia per frontage/flank face (dark band); the frontage
-  // band also carries a sample logo plate (au-Style-like black fascia + logo).
+  // Continuous branded fascia per frontage/flank face. The horizontal band itself
+  // is the identity, as on ordinary Japanese convenience and roadside chains.
   for (const [faceIndex, info] of bandByFace) {
     const face = plan.faces.find((f) => f.index === faceIndex);
     if (!face) continue;
-    g.add(bandMesh(face.a, face.b, face.normal, info.z, info.h, p.brandColor));
-    if (face.role === 'frontage') g.add(bandLogoPlate(face, info.z, info.h, p.brandColor, plan.logoId));
+    g.add(bandMesh(face.a, face.b, face.normal, info.z, info.h, p.brandColor, plan.logoId));
   }
 
   for (const r of roofs) roofMeshes(r).forEach((mesh) => g.add(mesh));
@@ -214,7 +214,7 @@ function glazedPanel(panel: StorePanel, kind: 'glazing' | 'entrance'): THREE.Gro
 
 /** One continuous signage fascia along a wall face (a→b), just proud of the wall
  *  and extended past each end so perpendicular bands overlap and hide the corner. */
-function bandMesh(a: Vec2, b: Vec2, normal: Vec2, zc: number, h: number, _brand: number): THREE.Group {
+function bandMesh(a: Vec2, b: Vec2, normal: Vec2, zc: number, h: number, brand: number, logoId: number): THREE.Group {
   const grp = new THREE.Group();
   const up = new THREE.Vector3(0, 1, 0);
   const A = toThree(a.x, a.y, 0), B = toThree(b.x, b.y, 0);
@@ -223,37 +223,20 @@ function bandMesh(a: Vec2, b: Vec2, normal: Vec2, zc: number, h: number, _brand:
   const DEPTH = 0.08;
   const zAxis = dir3(normal.x, normal.y);
   const xAxis = new THREE.Vector3().crossVectors(up, zAxis).normalize();
-  const face = new THREE.Mesh(new THREE.BoxGeometry(L + 2 * EXT, h, DEPTH), fasciaBaseMaterial());
-  grp.add(face);
-  // thin metal trim top & bottom so the band reads as a mounted box, not a decal
-  const trim = metalMaterial();
-  for (const sy of [h / 2 - 0.04, -h / 2 + 0.04]) {
-    const t = new THREE.Mesh(new THREE.BoxGeometry(L + 2 * EXT, 0.08, DEPTH + 0.02), trim);
-    t.position.y = sy; grp.add(t);
-  }
-  const offset = PANEL_T / 2 + 0.02;
-  const pos = toThree((a.x + b.x) / 2, (a.y + b.y) / 2, zc).add(zAxis.clone().multiplyScalar(offset));
+  const cabinet = signBoard(
+    L + 2 * EXT, h, DEPTH,
+    fasciaMaterial(brand, logoId, (L + 2 * EXT) / h),
+    { doubleSided: false, frame: 0.045 },
+  );
+  grp.add(cabinet);
+  const offset = PANEL_T / 2 + 0.34;
+  const displayZ = zc - Math.min(0.32, h * 0.22); // hang below pitched-roof fascia
+  const pos = toThree((a.x + b.x) / 2, (a.y + b.y) / 2, displayZ).add(zAxis.clone().multiplyScalar(offset));
   const m = new THREE.Matrix4().makeBasis(xAxis, up, zAxis);
   m.setPosition(pos);
   grp.applyMatrix4(m);
   grp.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
   return grp;
-}
-
-/** A sample logo plate on the frontage fascia (right-of-centre, like au-Style). */
-function bandLogoPlate(face: { a: Vec2; b: Vec2; normal: Vec2 }, zc: number, h: number, brand: number, logoId: number): THREE.Mesh {
-  const L = Math.hypot(face.b.x - face.a.x, face.b.y - face.a.y) || 1;
-  const pw = Math.min(L * 0.5, 5.2), ph = h * 0.86;
-  const t = 0.68; // toward the entrance side
-  const px = face.a.x + (face.b.x - face.a.x) * t, py = face.a.y + (face.b.y - face.a.y) * t;
-  const up = new THREE.Vector3(0, 1, 0);
-  const zAxis = dir3(face.normal.x, face.normal.y);
-  const xAxis = new THREE.Vector3().crossVectors(up, zAxis).normalize();
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.05), fasciaMaterial(brand, logoId));
-  const m = new THREE.Matrix4().makeBasis(xAxis, up, zAxis);
-  m.setPosition(toThree(px, py, zc).add(zAxis.clone().multiplyScalar(PANEL_T / 2 + 0.06)));
-  plate.applyMatrix4(m); plate.castShadow = true;
-  return plate;
 }
 
 /** Orient a centered box: local +x along axisU (world XY), +z along axisV. */
@@ -488,29 +471,34 @@ function buildingSignMesh(s: SignInstance): THREE.Object3D {
   const n = { x: Math.cos(yaw), y: Math.sin(yaw) }; // outward (road-facing) normal
   const t = { x: -n.y, y: n.x };
   if (s.kind === 'wall') {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, 0.3), signFaceMaterial(s.color, s.logoId));
-    orientOBB(box, s.pos.x + n.x * (PANEL_T / 2 + 0.15), s.pos.y + n.y * (PANEL_T / 2 + 0.15), s.z, t, n);
-    box.castShadow = true; g.add(box);
+    const board = signBoard(s.w, s.h, 0.24, signFaceMaterial(s.color, s.logoId, 'wall', s.w / s.h), { frame: 0.035 });
+    orientOBB(board, s.pos.x + n.x * (PANEL_T / 2 + 0.15), s.pos.y + n.y * (PANEL_T / 2 + 0.15), s.z, t, n);
+    g.add(board);
   } else if (s.kind === 'blade') {
     // broad faces ‖ the wall (thin axis = tangent), projecting along n
     const D = 0.9;
     const bracket = new THREE.Mesh(new THREE.BoxGeometry(PANEL_T / 2 + 0.2, 0.14, 0.14), metalMaterial());
     orientOBB(bracket, s.pos.x + n.x * (PANEL_T / 2 + 0.1), s.pos.y + n.y * (PANEL_T / 2 + 0.1), s.z + s.h / 2 - 0.2, n, t);
     g.add(bracket);
-    const board = new THREE.Mesh(new THREE.BoxGeometry(D, s.h, 0.16), signFaceMaterial(s.color, s.logoId));
+    const board = signBoard(D, s.h, 0.16, signFaceMaterial(s.color, s.logoId, 'blade', D / s.h), { frame: 0.025 });
     orientOBB(board, s.pos.x + n.x * (PANEL_T / 2 + 0.1 + D / 2), s.pos.y + n.y * (PANEL_T / 2 + 0.1 + D / 2), s.z, n, t);
-    board.castShadow = true; g.add(board);
+    g.add(board);
   } else if (s.kind === 'roof-cube') {
     // 屋上キューブ: a cube on the roof, logo on all faces, facing the road
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.w), signFaceMaterial(s.color, s.logoId));
+    const faceMat = signFaceMaterial(s.color, s.logoId, 'square', s.w / s.h);
+    const cube = signBoard(s.w, s.h, s.w, faceMat, { frame: 0.08 });
+    for (const side of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(s.w - 0.16, s.h - 0.16), faceMat);
+      p.rotation.y = side * Math.PI / 2; p.position.x = side * (s.w / 2 + 0.006); cube.add(p);
+    }
     orientOBB(cube, s.pos.x, s.pos.y, s.z + s.h / 2, t, n);
-    cube.castShadow = true; g.add(cube);
+    g.add(cube);
   } else if (s.kind === 'roof-board') {
     // 屋上板型: an upright logo panel on short legs, broad face toward the road
     const legH = s.poleH;
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, 0.25), signFaceMaterial(s.color, s.logoId));
+    const panel = signBoard(s.w, s.h, 0.22, signFaceMaterial(s.color, s.logoId, 'rooftop', s.w / s.h), { frame: 0.035 });
     orientOBB(panel, s.pos.x, s.pos.y, s.z + legH + s.h / 2, t, n);
-    panel.castShadow = true; g.add(panel);
+    g.add(panel);
     for (const sgn of [-1, 1]) {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, legH, 0.16), poleMaterial());
       leg.position.set(s.pos.x + t.x * sgn * s.w * 0.35, s.z + legH / 2, -(s.pos.y + t.y * sgn * s.w * 0.35));
