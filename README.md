@@ -93,6 +93,7 @@ Lot ──► planSite ──► HousePad ──► generateFootprint ──► 
 
 関連する調査・設計資料:
 
+- [日本の町並みプロシージャル生成 — 拡張候補と実装優先度](docs/japanese-streetscape-expansion-roadmap.md)
 - [日本の踏切プロシージャル生成 — パラメータ調査・設計・実装計画](docs/level-crossing-parametric-design.md)
 - [日本の集合住宅プロシージャル生成 — 調査・実装計画](docs/apartment-gen-research.md)
 
