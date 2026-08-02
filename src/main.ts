@@ -15,6 +15,7 @@ import {
   type CrossingScenario, type RailwayConfig,
 } from './env/railway';
 import { railwayGroup, disposeRailway } from './viewer/railway';
+import type { WindowLightingMode } from './viewer/windowSurfaces';
 
 type StyleName = 'generic' | 'jp-tract' | 'jp-cube';
 
@@ -33,6 +34,8 @@ const view = {
   fenceStyle: 'auto' as 'auto' | FenceStyle,
   doorStyle: 'auto' as 'auto' | DoorStyle,
   doorLeaf: 'auto' as 'auto' | DoorLeafVariant,
+  windowLighting: 'mixed' as WindowLightingMode,
+  windowInteriorMapping: true,
   roofPitch: 0.45,
   eaveOverhang: 0.7,
   doorCanopy: true,
@@ -204,6 +207,9 @@ function buildHouseGroup(seed: number): BuiltHouse {
   const wall = resolveWall(seed);
   const door = resolveDoor(seed);
   const rp: RenderParams = {
+    seed,
+    windowLighting: view.windowLighting,
+    windowInteriorMapping: view.windowInteriorMapping,
     panelW: hcfg.panelW,
     panelH: hcfg.panelH,
     showFootprint: view.showFootprint,
@@ -525,6 +531,8 @@ fFac.add(cfg, 'floors', 1, 4, 1).onChange(regenerate);
 fFac.add(cfg, 'windowDensity', 0, 1, 0.05).onChange(regenerate);
 fFac.add(cfg, 'windowJitter', 0, 1, 0.05).onChange(regenerate);
 fFac.add(cfg, 'windowSizeMode', ['medium', 'byFloor', 'japan']).name('window sizes').onChange(regenerate);
+fFac.add(view, 'windowLighting', ['day', 'night', 'mixed']).name('窓 (昼/夜/混在)').onChange(regenerate);
+fFac.add(view, 'windowInteriorMapping').name('窓 Interior Mapping').onChange(regenerate);
 fFac.add(cfg, 'streetOpenness', 0, 1, 0.05).name('街路側 openness').onChange(regenerate);
 fFac.add(cfg, 'cornerMarginBays', 0, 3, 1).onChange(regenerate);
 fFac.add(cfg, 'doorFacesRoadOnly').onChange(regenerate);

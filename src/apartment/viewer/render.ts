@@ -18,6 +18,9 @@ import {
 } from './materials';
 import { aptSiteMeshes } from './site';
 import type { AptSitePlan } from '../gen/types';
+import {
+  resolveWindowAppearance, windowAppearanceMaterial, type WindowLightingMode,
+} from '../../viewer/windowSurfaces';
 
 const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y);
 const dir3 = (x: number, y: number) => new THREE.Vector3(x, 0, -y).normalize();
@@ -29,6 +32,9 @@ export type StairGuardStyle = 'steel' | 'white' | 'wall'; // 外階段ガード:
 export type WallPattern = 'horizontal' | 'vertical' | 'none';
 
 export interface AptRenderParams {
+  seed: number;
+  windowLighting: WindowLightingMode;
+  windowInteriorMapping: boolean;
   showSite: boolean;
   wallMain: StoreWallVariant;
   wallBase: StoreWallVariant; // 1階の腰壁(water two-tone)。=wallMain なら単一
@@ -61,7 +67,7 @@ export function renderApartment(
   const doorMod = doorP ? makeDoorModule(doorP.w, doorP.h, { style: 'flush' }, storeWallMaterial(p.wallMain)) : null;
   for (const panel of plan.panels) {
     if (panel.type === 'door') { if (doorMod) g.add(doorInstance(doorMod, panel)); }
-    else g.add(panelMesh(panel, p.accent));
+    else g.add(panelMesh(panel, p.accent, p.seed, p.windowLighting, p.windowInteriorMapping));
   }
   for (const b of plan.balconies) g.add(balconyMesh(b, p.balconyRail, p.accent));
   for (const part of plan.partitions) g.add(partitionMesh(part));
@@ -161,7 +167,13 @@ function doorInstance(mod: ModuleMesh, panel: AptPanel): THREE.Object3D {
   return m;
 }
 
-function panelMesh(panel: AptPanel, accent: number): THREE.Object3D {
+function panelMesh(
+  panel: AptPanel,
+  accent: number,
+  seed: number,
+  lighting: WindowLightingMode,
+  interiorMapping: boolean,
+): THREE.Object3D {
   const grp = new THREE.Group();
   const w = panel.w, h = panel.h;
   if (panel.type === 'mb') {
@@ -170,15 +182,28 @@ function panelMesh(panel: AptPanel, accent: number): THREE.Object3D {
   } else if (panel.type === 'entrance') {
     glazed(grp, w, h, accent, true);
   } else {
-    glazed(grp, w, h, accent, false);
+    const isResidentialWindow = panel.type === 'window' || panel.type === 'sashwindow' || panel.type === 'stairwin';
+    const glassMaterial = isResidentialWindow
+      ? windowAppearanceMaterial(resolveWindowAppearance(
+        interiorMapping,
+        lighting,
+        seed,
+        panel.size ?? (panel.type === 'stairwin' ? 'small' : 'medium'),
+        panel.floor,
+        Math.round(panel.pos.x * 100),
+        Math.round(panel.pos.y * 100),
+        panel.type === 'sashwindow' ? 1 : panel.type === 'stairwin' ? 2 : 0,
+      ))
+      : windowGlassMaterial();
+    glazed(grp, w, h, accent, false, glassMaterial);
   }
   grp.applyMatrix4(panelBasis(panel.yawDeg, panel.pos, panel.z));
   grp.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
   return grp;
 }
 
-function glazed(grp: THREE.Group, w: number, h: number, accent: number, entrance: boolean) {
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, h * 0.94, 0.05), windowGlassMaterial());
+function glazed(grp: THREE.Group, w: number, h: number, accent: number, entrance: boolean, material: THREE.Material = windowGlassMaterial()) {
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, h * 0.94, 0.05), material);
   glass.position.z = PROUD / 2 - 0.06; grp.add(glass);
   const fr = 0.07, mZ = PROUD / 2;
   const bar = (bw: number, bh: number, x: number, y: number) => {

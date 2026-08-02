@@ -145,7 +145,14 @@ const BAY_OUT = 0.4; // 出窓 protrusion depth
 
 /** Window: wall surround + recessed frame + mullions + sill + glass, plus
  *  optional 面格子 (grille bars) and シャッターボックス (shutter housing). */
-export function makeWindowModule(W: number, H: number, size: WindowSize = 'medium', opts: WindowOpts = {}, wallMatOverride?: THREE.Material): ModuleMesh {
+export function makeWindowModule(
+  W: number,
+  H: number,
+  size: WindowSize = 'medium',
+  opts: WindowOpts = {},
+  wallMatOverride?: THREE.Material,
+  glassMatOverride?: THREE.Material,
+): ModuleMesh {
   const spec = windowSpec(W, H, size);
   const ow = spec.ow;
   const oh = spec.oh;
@@ -198,7 +205,10 @@ export function makeWindowModule(W: number, H: number, size: WindowSize = 'mediu
   }
   const frame = mergeGeometries(frameParts, false)!;
 
-  const glass = box(ow - fw, oh - fw, 0.02, 0, oy, zGlass);
+  // Window imagery is authored as one complete 0..1 surface. Keep the default
+  // BoxGeometry UVs here rather than the metre-scaled wall UVs used by box().
+  const glass = new THREE.BoxGeometry(ow - fw, oh - fw, 0.02);
+  glass.translate(0, oy, zGlass);
 
   const geometry = mergeGeometries([wall, frame, glass], true)!;
   return {
@@ -206,7 +216,7 @@ export function makeWindowModule(W: number, H: number, size: WindowSize = 'mediu
     materials: [
       wallMatOverride ?? wallMat(),
       new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.4, metalness: 0.6, envMapIntensity: 1 }), // dark frame
-      glassMaterial(), // reflective glass
+      glassMatOverride ?? glassMaterial(), // privacy texture or reflective glass
     ],
   };
 }

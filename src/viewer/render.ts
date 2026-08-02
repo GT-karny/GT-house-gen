@@ -4,6 +4,7 @@ import type { RoofMass } from '../gen/roof';
 import { roofMaterial, slabMaterial, wallMaterial, doorMaterial, type WallVariant, type DoorLeafVariant, type FenceMeshTex, type BlockVariant, type WoodFenceTex } from './materials';
 import { makeWindowModule, makeDoorModule, planarBoxUV, roundedBox, WALL_TILE, WALL_THICKNESS, type ModuleMesh, type DoorStyle } from './modules';
 import { siteMeshes } from './site';
+import { resolveWindowAppearance, windowAppearanceMaterial, type WindowAppearanceKey, type WindowLightingMode } from './windowSurfaces';
 
 // gen uses XY ground plane with +Z up; three uses +Y up. One consistent map:
 const toThree = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y);
@@ -12,6 +13,9 @@ const dir3 = (x: number, y: number) => new THREE.Vector3(x, 0, -y).normalize();
 const PANEL_THICKNESS = WALL_THICKNESS; // match the opening surrounds → flush joints
 
 export interface RenderParams {
+  seed: number;
+  windowLighting: WindowLightingMode;
+  windowInteriorMapping: boolean;
   panelW: number;
   panelH: number;
   showFootprint: boolean;
@@ -66,7 +70,7 @@ export function renderHouse(
   // a window/door uses the same wall material as the plain wall panels.
   const panelKey = (panel: PanelInstance) =>
     panel.type === 'window'
-      ? `window:${panel.size ?? 'medium'}:${panel.grille ? 'g' : ''}${panel.shutter ? 's' : ''}${panel.protrude ? 'p' : ''}:${wallVariant(panel)}`
+      ? `window:${panel.size ?? 'medium'}:${panel.grille ? 'g' : ''}${panel.shutter ? 's' : ''}${panel.protrude ? 'p' : ''}:${wallVariant(panel)}:${resolveWindowAppearance(p.windowInteriorMapping, p.windowLighting, p.seed, panel.size ?? 'medium', panel.faceIndex, panel.floor, panel.bay)}`
       : panel.type === 'wall'
         ? `wall:${wallVariant(panel)}`
         : `door:${wallVariant(panel)}:${p.doorStyle}:${p.doorLeaf}:${p.doorSidelight ? 's' : ''}`;
@@ -97,12 +101,12 @@ export function renderHouse(
       );
       return { geometry: d.geometry, material: d.materials };
     }
-    const [, size, flags, variant] = key.split(':');
+    const [, size, flags, variant, appearance] = key.split(':');
     const w: ModuleMesh = makeWindowModule(p.panelW, p.panelH, size as WindowSize, {
       grille: flags.includes('g'),
       shutter: flags.includes('s'),
       protrude: flags.includes('p'),
-    }, wallMaterial(wv(variant)));
+    }, wallMaterial(wv(variant)), windowAppearanceMaterial(appearance as WindowAppearanceKey));
     return { geometry: w.geometry, material: w.materials };
   };
 

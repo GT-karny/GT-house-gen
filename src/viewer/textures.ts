@@ -28,6 +28,20 @@ export function tex(name: string, repeat = 1, srgb = true): THREE.Texture {
   return t;
 }
 
+/** A non-tiling image whose filename already includes its extension. Useful for
+ * authored atlases that are not part of the JPG PBR convention above. */
+export function imageTex(name: string, srgb = true): THREE.Texture {
+  const key = `image:${name}@${srgb}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const t = inBrowser ? loader.load(`textures/${name}`) : new THREE.Texture();
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.anisotropy = 4;
+  cache.set(key, t);
+  return t;
+}
+
 /** A full PBR MeshStandardMaterial from a CC0 surface: diffuse + normal +
  *  roughness (+ optional metalness `_m` and alpha `_o`) maps at a shared tile
  *  density, plus optional tint/metalness/transparency. */

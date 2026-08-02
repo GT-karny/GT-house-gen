@@ -9,7 +9,7 @@ const PRESETS = Object.keys(APT_PRESETS) as AptPresetName[];
 const cfgOf = (p: AptPresetName, seed: number): AptConfig => ({
   ...structuredClone(DEFAULT_APT_CONFIG), ...structuredClone(APT_PRESETS[p]), seed,
 });
-const rp = { showSite: true, wallMain: 'stone' as const, wallBase: 'concrete' as const, accent: 0x8a6d5a, balconyRail: 'glass' as const, stairGuard: 'steel' as const, wallPattern: 'none' as const, stripe: 0x6b4f3a };
+const rp = { seed: 1, windowLighting: 'mixed' as const, windowInteriorMapping: true, showSite: true, wallMain: 'stone' as const, wallBase: 'concrete' as const, accent: 0x8a6d5a, balconyRail: 'glass' as const, stairGuard: 'steel' as const, wallPattern: 'none' as const, stripe: 0x6b4f3a };
 
 function assertFinite(g: THREE.Object3D) {
   g.traverse((o) => {

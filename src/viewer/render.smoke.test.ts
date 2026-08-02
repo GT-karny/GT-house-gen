@@ -9,6 +9,7 @@ const lot = makeSampleLot();
 
 function rp(cfg: GenConfig, roofType: 'flat' | 'gable' | 'hip' | 'mono'): RenderParams {
   return {
+    seed: cfg.seed, windowLighting: 'mixed', windowInteriorMapping: true,
     panelW: cfg.panelW, panelH: cfg.panelH, showFootprint: true, showMasses: false,
     doorCanopy: true, eaveOverhang: 0.7, roofType, ridgeAxis: 'U',
     wallMain: 'plaster', wallBase: 'stone', doorStyle: 'panel', doorLeaf: 'wood_a', doorSidelight: true,

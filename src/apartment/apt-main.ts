@@ -10,6 +10,7 @@ import { makeSampleAptLot, type LotShape } from './gen/lot';
 import { rand01 } from '../shared/rng';
 import type { StoreWallVariant } from './viewer/materials';
 import * as THREE from 'three';
+import type { WindowLightingMode } from '../viewer/windowSurfaces';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const hud = document.getElementById('hud') as HTMLDivElement;
@@ -75,6 +76,8 @@ const view = {
   stairGuard: 'auto' as StairGuardChoice,
   elevator: 'auto' as 'auto' | 'on' | 'off',
   exteriorStair: 'auto' as 'auto' | 'on' | 'off',
+  windowLighting: 'mixed' as WindowLightingMode,
+  windowInteriorMapping: true,
 };
 
 let current: THREE.Group | null = null;
@@ -98,6 +101,7 @@ function regenerate() {
   const pattern: WallPattern = resolveWallPattern(cfg);
   const wallBase = pattern === 'horizontal' ? wall.base : wall.main;
   const rp: AptRenderParams = {
+    seed: cfg.seed, windowLighting: view.windowLighting, windowInteriorMapping: view.windowInteriorMapping,
     showSite: view.showSite, wallMain: wall.main, wallBase, accent: cfg.accentColor,
     balconyRail: rail, stairGuard: guard, wallPattern: pattern, stripe: resolveStripe(cfg.seed),
   };
@@ -172,6 +176,8 @@ fBld.add(view, 'balconyRail', ['auto', 'glass', 'bars', 'panel', 'concrete']).na
 fBld.add(cfg, 'coreStyle', ['auto', 'blank', 'windows', 'glazed']).name('コア立面(空白/窓/ガラス)').onChange(regenerate);
 fBld.add(cfg, 'balconyForm', ['auto', 'continuous', 'inset', 'box']).name('バルコニー形状(連続/彫込/箱)').onChange(regenerate);
 fBld.add(cfg, 'windowMix', ['auto', 'single', 'mixed']).name('窓構成(全幅/掃出+腰窓)').onChange(regenerate);
+fBld.add(view, 'windowLighting', ['day', 'night', 'mixed']).name('窓 (昼/夜/混在)').onChange(regenerate);
+fBld.add(view, 'windowInteriorMapping').name('窓 Interior Mapping').onChange(regenerate);
 fBld.add(cfg, 'wallPattern', ['auto', 'horizontal', 'vertical', 'none']).name('ツートン分節(水平帯/縦帯)').onChange(regenerate);
 fBld.add(cfg, 'gableStyle', ['auto', 'blank', 'windows']).name('妻面(無地/窓)').onChange(regenerate);
 
