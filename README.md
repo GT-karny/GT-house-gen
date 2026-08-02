@@ -29,6 +29,8 @@ pnpm vitest run -t "no gaps"                          # テスト名(部分一�
 - パッケージマネージャは **pnpm**。`esbuild` のみビルド許可（`package.json` の `pnpm.onlyBuiltDependencies`）。初回に esbuild 未ビルドで失敗する場合は `pnpm rebuild esbuild`。
 - CC0 アセットは `public/textures/`・`public/hdri/`（Vite が `/` 配下で配信）。
 
+開発サーバ上の各プロトタイプ: 戸建 `index.html`、ロードサイド店 `store.html`、集合住宅 `apartment.html`、町工場・整備工場・貸しガレージ `factory.html`。
+
 ---
 
 ## アーキテクチャ
@@ -96,6 +98,7 @@ Lot ──► planSite ──► HousePad ──► generateFootprint ──► 
 - [日本の町並みプロシージャル生成 — 拡張候補と実装優先度](docs/japanese-streetscape-expansion-roadmap.md)
 - [日本の踏切プロシージャル生成 — パラメータ調査・設計・実装計画](docs/level-crossing-parametric-design.md)
 - [日本の集合住宅プロシージャル生成 — 調査・実装計画](docs/apartment-gen-research.md)
+- [日本の町工場・整備工場・貸しガレージ — 調査・パラメータ設計](docs/japanese-factory-generator-research.md)
 
 - **建物ジオメトリの完全プロシージャル化**: 壁・窓・ドアの**モジュラーパネル（板アセット）に依存しない**、開口・框・水切り等まで**手続き的にジオメトリ生成**する方式へ。
 - **アセット利用でよいもの**: **テクスチャ／マテリアル・車・植物**などはアセット（CC0 等）に頼ってよい。プロシージャル化の対象は建物ジオメトリに限定する。

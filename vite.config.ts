@@ -12,6 +12,7 @@ export default defineConfig({
         store: resolve('store.html'),
         signage: resolve('signage.html'),
         apartment: resolve('apartment.html'),
+        factory: resolve('factory.html'),
       },
     },
   },
